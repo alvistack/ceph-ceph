@@ -1,0 +1,20 @@
+diff --git a/src/rgw/driver/rados/rgw_user.cc b/src/rgw/driver/rados/rgw_user.cc
+index 5fe57c65147..79101d2b6c0 100644
+--- a/src/rgw/driver/rados/rgw_user.cc
++++ b/src/rgw/driver/rados/rgw_user.cc
+@@ -834,7 +834,14 @@ int RGWAccessKeyPool::remove(const DoutPrefixProvider *dpp,
+ 
+   ret = check_op(op_state, &subprocess_msg);
+   if (ret < 0) {
+-    set_err_msg(err_msg, "unable to parse request, " + subprocess_msg);
++    if (op_state.is_populated() && (user_id == op_state.get_user_id())) {
++      set_err_msg(err_msg, "unable to create user " + user_id.to_str ()
++		  + " because user id " + op_state.get_user_id().to_str()
++		  + " already exists with email "
++		  + op_state.get_user_email());
++    } else {
++      set_err_msg(err_msg, "unable to parse request, " + subprocess_msg);
++    }
+     return ret;
+   }
+ 
