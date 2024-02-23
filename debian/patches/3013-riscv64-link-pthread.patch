@@ -1,0 +1,12 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0e92cc0..0ed7139 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -28,6 +28,7 @@ endif()
+ 
+ if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+   set(LINUX ON)
++  set(THREADS_PREFER_PTHREAD_FLAG ON)
+   FIND_PACKAGE(Threads)
+ elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+   set(FREEBSD ON)

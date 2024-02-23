@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0e92cc0..b487862 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -507,7 +507,7 @@ if(WITH_THREAD_SAFE_RES_QUERY)
+   set(HAVE_THREAD_SAFE_RES_QUERY 1 CACHE INTERNAL "Thread safe res_query supported.")
+ endif()
+ 
+-option(WITH_REENTRANT_STRSIGNAL "strsignal is reentrant" OFF)
++option(WITH_REENTRANT_STRSIGNAL "strsignal is reentrant" ON)
+ if(WITH_REENTRANT_STRSIGNAL)
+   set(HAVE_REENTRANT_STRSIGNAL 1 CACHE INTERNAL "Reentrant strsignal is supported.")
+ endif()
