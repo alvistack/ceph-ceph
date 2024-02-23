@@ -1,0 +1,28 @@
+diff --git a/src/client/fuse_ll.cc b/src/client/fuse_ll.cc
+index 2f4cd28b340..cb44106fceb 100644
+--- a/src/client/fuse_ll.cc
++++ b/src/client/fuse_ll.cc
+@@ -67,6 +67,10 @@
+ #define FUSE_SUPER_MAGIC 0x65735546
+ #endif
+ 
++#ifndef STATX_INO
++#include <linux/stat.h>
++#endif
++
+ #define _CEPH_CLIENT_ID	"ceph.client_id"
+ #endif
+ 
+@@ -192,6 +196,12 @@ public:
+ };
+ 
+ #if defined(__linux__)
++ssize_t statx(int dfd, const char *filename, unsigned flags,
++	      unsigned int mask, struct statx *buffer)
++{
++	return syscall(__NR_statx, dfd, filename, flags, mask, buffer);
++}
++
+ static int already_fuse_mounted(const char *path, bool &already_mounted)
+ {
+   struct statx path_statx;
