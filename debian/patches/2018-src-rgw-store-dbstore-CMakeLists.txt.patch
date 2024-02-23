@@ -1,0 +1,21 @@
+diff --git a/src/rgw/driver/dbstore/CMakeLists.txt b/src/rgw/driver/dbstore/CMakeLists.txt
+index a3aca7a64e4..47f8b2c9f66 100644
+--- a/src/rgw/driver/dbstore/CMakeLists.txt
++++ b/src/rgw/driver/dbstore/CMakeLists.txt
+@@ -24,7 +24,7 @@ set(dbstore_mgr_srcs
+     dbstore_mgr.cc
+     )
+ 
+-add_library(dbstore_lib ${dbstore_srcs})
++add_library(dbstore_lib STATIC ${dbstore_srcs})
+ target_include_directories(dbstore_lib
+     PUBLIC "${CMAKE_SOURCE_DIR}/src/rgw"
+     PUBLIC "${CMAKE_SOURCE_DIR}/src/rgw/store/rados"
+@@ -49,6 +49,7 @@ ENDIF()
+ 
+ # add pthread library
+ set (CMAKE_LINK_LIBRARIES ${CMAKE_LINK_LIBRARIES} pthread)
++set (CMAKE_LINK_LIBRARIES ${CMAKE_LINK_LIBRARIES} global)
+ 
+ find_package(gtest QUIET)
+ if(WITH_TESTS)

@@ -1,0 +1,48 @@
+diff --git a/src/common/LogEntry.cc b/src/common/LogEntry.cc
+index d7b44a2..de6dda1 100644
+--- a/src/common/LogEntry.cc
++++ b/src/common/LogEntry.cc
+@@ -183,7 +183,7 @@ string clog_type_to_string(clog_type t)
+       return "crit";
+     default:
+       ceph_abort();
+-      return 0;
++      return "";
+   }
+ }
+ 
+diff --git a/src/s3select/include/s3select_functions.h b/src/s3select/include/s3select_functions.h
+index 8c507fc..174c620 100644
+--- a/src/s3select/include/s3select_functions.h
++++ b/src/s3select/include/s3select_functions.h
+@@ -472,7 +472,7 @@ public:
+ 
+   std::string  print(int ident) override
+   {
+-    return std::string(0);
++    return std::string("");
+   }
+ 
+   void push_argument(base_statement* arg)
+diff --git a/src/test/librados/tier_cxx.cc b/src/test/librados/tier_cxx.cc
+index be1d411..820fc47 100644
+--- a/src/test/librados/tier_cxx.cc
++++ b/src/test/librados/tier_cxx.cc
+@@ -120,7 +120,7 @@ static inline void buf_to_hex(const unsigned char *buf, int len, char *str)
+ }
+ 
+ void check_fp_oid_refcount(librados::IoCtx& ioctx, std::string foid, uint64_t count,
+-			   std::string fp_algo = NULL)
++			   std::string fp_algo = "")
+ {
+   bufferlist t;
+   int size = foid.length();
+@@ -148,7 +148,7 @@ void check_fp_oid_refcount(librados::IoCtx& ioctx, std::string foid, uint64_t co
+   ASSERT_LE(count, refs.count());
+ }
+ 
+-string get_fp_oid(string oid, std::string fp_algo = NULL)
++string get_fp_oid(string oid, std::string fp_algo = "")
+ {
+   if (fp_algo == "sha1") {
+     unsigned char fingerprint[CEPH_CRYPTO_SHA1_DIGESTSIZE + 1];

@@ -1,4 +1,3 @@
-#!/bin/sh
 # vim: set noet ts=8:
 # postinst script for ceph-mon
 #
