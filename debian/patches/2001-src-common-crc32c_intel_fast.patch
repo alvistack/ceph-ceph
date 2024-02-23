@@ -1,0 +1,57 @@
+diff --git a/src/common/crc32c_intel_fast_zero_asm.s b/src/common/crc32c_intel_fast_zero_asm.s
+index 216ecf6..1c161a6 100644
+--- a/src/common/crc32c_intel_fast_zero_asm.s
++++ b/src/common/crc32c_intel_fast_zero_asm.s
+@@ -1,5 +1,5 @@
+ ;
+-; Copyright 2012-2013 Intel Corporation All Rights Reserved.
++; Copyright 2012-2015 Intel Corporation All Rights Reserved.
+ ; All rights reserved.
+ ;
+ ; http://opensource.org/licenses/BSD-3-Clause
+@@ -60,6 +60,19 @@ default rel
+ 	xor     rbx, rbx                ;; rbx = crc1 = 0;
+ 	xor     r10, r10                ;; r10 = crc2 = 0;
+ 
++	cmp	len, %%bSize*3*2
++	jbe	%%non_prefetch
++
++ %assign i 0
++ %rep %%bSize/8 - 1
++	crc32   rax, bufptmp  ;; update crc0
++	crc32   rbx, bufptmp  ;; update crc1
++	crc32   r10, bufptmp  ;; update crc2
++	%assign i (i+8)
++ %endrep
++	jmp %%next %+ %1
++
++%%non_prefetch:
+  %assign i 0
+  %rep %%bSize/8 - 1
+ 	crc32   rax, bufptmp  ;; update crc0
+@@ -67,6 +80,8 @@ default rel
+ 	crc32   r10, bufptmp  ;; update crc2
+ 	%assign i (i+8)
+  %endrep
++
++%%next %+ %1:
+ 	crc32   rax, bufptmp  ;; update crc0
+ 	crc32   rbx, bufptmp  ;; update crc1
+ ; SKIP  ;crc32  r10, bufptmp  ;; update crc2
+@@ -181,12 +196,15 @@ crc32_iscsi_zero_00:
+ %define crc_init_dw     r8d
+ %endif
+ 
+-
++	endbranch
+ 	push    rdi
+ 	push    rbx
+ 
+ 	mov     rax, crc_init           ;; rax = crc_init;
+ 
++	cmp	len, 8
++	jb	less_than_8
++
+ ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ ;; 1) ALIGN: ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ 

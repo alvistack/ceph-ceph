@@ -1,0 +1,298 @@
+From 7d11c708b99d824f6caad66381a6ccb12e656c2d Mon Sep 17 00:00:00 2001
+From: Venky Shankar <vshankar@redhat.com>
+Date: Thu, 17 Oct 2024 15:01:32 +0000
+Subject: [PATCH 1/3] mds: make parts of mdlog reusable to be used by beacon
+
+Signed-off-by: Venky Shankar <vshankar@redhat.com>
+---
+ src/mds/Beacon.cc | 13 ++++++-------
+ src/mds/MDLog.cc  |  8 ++++++++
+ src/mds/MDLog.h   |  4 ++++
+ 3 files changed, 18 insertions(+), 7 deletions(-)
+
+diff --git a/src/mds/Beacon.cc b/src/mds/Beacon.cc
+index 642d3428a27df..9977b4ba378c5 100644
+--- a/src/mds/Beacon.cc
++++ b/src/mds/Beacon.cc
+@@ -320,16 +320,15 @@ void Beacon::notify_health(MDSRank const *mds)
+   // Detect MDS_HEALTH_TRIM condition
+   // Indicates MDS is not trimming promptly
+   {
+-    const auto log_max_segments = mds->mdlog->get_max_segments();
+-    const auto log_warn_factor = g_conf().get_val<double>("mds_log_warn_factor");
+-    if (mds->mdlog->get_num_segments() > (size_t)(log_max_segments * log_warn_factor)) {
++    if (mds->mdlog->is_trim_slow()) {
++      auto num_segments = mds->mdlog->get_num_segments();
++      auto max_segments = mds->mdlog->get_max_segments();
+       CachedStackStringStream css;
+-      *css << "Behind on trimming (" << mds->mdlog->get_num_segments()
+-        << "/" << log_max_segments << ")";
++      *css << "Behind on trimming (" << num_segments << "/" << max_segments << ")";
+ 
+       MDSHealthMetric m(MDS_HEALTH_TRIM, HEALTH_WARN, css->strv());
+-      m.metadata["num_segments"] = stringify(mds->mdlog->get_num_segments());
+-      m.metadata["max_segments"] = stringify(log_max_segments);
++      m.metadata["num_segments"] = stringify(num_segments);
++      m.metadata["max_segments"] = stringify(max_segments);
+       health.metrics.push_back(m);
+     }
+   }
+diff --git a/src/mds/MDLog.cc b/src/mds/MDLog.cc
+index 0be568433efee..2e1212e8cf456 100644
+--- a/src/mds/MDLog.cc
++++ b/src/mds/MDLog.cc
+@@ -58,6 +58,7 @@ MDLog::MDLog(MDSRank* m)
+   max_events = g_conf().get_val<int64_t>("mds_log_max_events");
+   skip_corrupt_events = g_conf().get_val<bool>("mds_log_skip_corrupt_events");
+   skip_unbounded_events = g_conf().get_val<bool>("mds_log_skip_unbounded_events");
++  log_warn_factor = g_conf().get_val<double>("mds_log_warn_factor");
+   upkeep_thread = std::thread(&MDLog::log_trim_upkeep, this);
+ }
+ 
+@@ -656,6 +657,10 @@ void MDLog::try_to_commit_open_file_table(uint64_t last_seq)
+   }
+ }
+ 
++bool MDLog::is_trim_slow() const {
++  return (segments.size() > (size_t)(max_segments * log_warn_factor));
++}
++
+ void MDLog::log_trim_upkeep(void) {
+   dout(10) << dendl;
+ 
+@@ -1642,4 +1647,7 @@ void MDLog::handle_conf_change(const std::set<std::string>& changed, const MDSMa
+   if (changed.count("mds_log_trim_decay_rate")){
+     log_trim_counter = DecayCounter(g_conf().get_val<double>("mds_log_trim_decay_rate"));
+   }
++  if (changed.count("mds_log_warn_factor")) {
++    log_warn_factor = g_conf().get_val<double>("mds_log_warn_factor");
++  }
+ }
+diff --git a/src/mds/MDLog.h b/src/mds/MDLog.h
+index e2ab4e686cddc..49e3c025dde01 100644
+--- a/src/mds/MDLog.h
++++ b/src/mds/MDLog.h
+@@ -173,6 +173,9 @@ class MDLog {
+   // replay state
+   std::map<inodeno_t, std::set<inodeno_t>> pending_exports;
+ 
++  // beacon needs me too
++  bool is_trim_slow() const;
++
+ protected:
+   struct PendingEvent {
+     PendingEvent(LogEvent *e, Context* c, bool f=false) : le(e), fin(c), flush(f) {}
+@@ -313,6 +316,7 @@ class MDLog {
+   std::set<LogSegment*> expired_segments;
+   std::set<LogSegment*> expiring_segments;
+   uint64_t events_since_last_major_segment = 0;
++  double log_warn_factor;
+ 
+   // log trimming decay counter
+   DecayCounter log_trim_counter;
+
+From 718afe26ba880c75279d2c0540aa8ce9dadfc1ed Mon Sep 17 00:00:00 2001
+From: Venky Shankar <vshankar@redhat.com>
+Date: Tue, 22 Oct 2024 08:00:23 +0000
+Subject: [PATCH 2/3] mds: start a new major segment after reaching minor
+ segment threshold
+
+Credit goes to Patrick (@batrick) for identifying this.
+
+When there are huge number of subtree exports (such as done in export
+thrashing test), the MDS would log an EExport event. The EExport event
+is relatively large in size. This causes the MDS to log new minor log
+segments frequently. Moreover, the MDS logs a major segment (boundary)
+after a certain number of events have been logged. This casues large
+number of (minor) events to get build up and cause delays in trimming
+expired segments, since journal expire position is updated on segment
+boundaries.
+
+To mitigate this issue, the MDS now starts a major segment after a
+configured number of minor segments have been logged. This threshold
+is configurable by adjusting `mds_log_minor_segments_per_major_segment`
+MDS config (defaults to 16).
+
+Fixes: https://tracker.ceph.com/issues/66948
+Signed-off-by: Venky Shankar <vshankar@redhat.com>
+---
+ src/common/options/mds.yaml.in | 19 +++++++++----------
+ src/mds/MDLog.cc               | 20 +++++++++++---------
+ src/mds/MDLog.h                |  4 ++--
+ 3 files changed, 22 insertions(+), 21 deletions(-)
+
+diff --git a/src/common/options/mds.yaml.in b/src/common/options/mds.yaml.in
+index 18efba561ed55..94824faef6bcf 100644
+--- a/src/common/options/mds.yaml.in
++++ b/src/common/options/mds.yaml.in
+@@ -586,16 +586,6 @@ options:
+   min: 1
+   services:
+   - mds
+-- name: mds_log_major_segment_event_ratio
+-  type: uint
+-  level: advanced
+-  desc: multiple of mds_log_events_per_segment between major segments
+-  default: 12
+-  services:
+-  - mds
+-  min: 1
+-  see_also:
+-  - mds_log_events_per_segment
+ # segment size for mds log, default to default file_layout_t
+ - name: mds_log_segment_size
+   type: size
+@@ -1741,3 +1731,12 @@ options:
+   - mds
+   flags:
+   - runtime
++- name: mds_log_minor_segments_per_major_segment
++  type: uint
++  level: advanced
++  desc: number of minor segments per major segment.
++  long_desc: The number of minor mds log segments since last major segment after which a major segment is started/logged.
++  default: 16
++  services:
++  - mds
++  min: 8
+diff --git a/src/mds/MDLog.cc b/src/mds/MDLog.cc
+index 2e1212e8cf456..177bd32cbb96a 100644
+--- a/src/mds/MDLog.cc
++++ b/src/mds/MDLog.cc
+@@ -53,12 +53,12 @@ MDLog::MDLog(MDSRank* m)
+   event_large_threshold = g_conf().get_val<uint64_t>("mds_log_event_large_threshold");
+   events_per_segment = g_conf().get_val<uint64_t>("mds_log_events_per_segment");
+   pause = g_conf().get_val<bool>("mds_log_pause");
+-  major_segment_event_ratio = g_conf().get_val<uint64_t>("mds_log_major_segment_event_ratio");
+   max_segments = g_conf().get_val<uint64_t>("mds_log_max_segments");
+   max_events = g_conf().get_val<int64_t>("mds_log_max_events");
+   skip_corrupt_events = g_conf().get_val<bool>("mds_log_skip_corrupt_events");
+   skip_unbounded_events = g_conf().get_val<bool>("mds_log_skip_unbounded_events");
+   log_warn_factor = g_conf().get_val<double>("mds_log_warn_factor");
++  minor_segments_per_major_segment = g_conf().get_val<uint64_t>("mds_log_minor_segments_per_major_segment");
+   upkeep_thread = std::thread(&MDLog::log_trim_upkeep, this);
+ }
+ 
+@@ -358,14 +358,15 @@ void MDLog::_submit_entry(LogEvent *le, MDSLogContextBase* c)
+   ceph_assert(!mds_is_shutting_down);
+ 
+   event_seq++;
+-  events_since_last_major_segment++;
+ 
+   if (auto sb = dynamic_cast<SegmentBoundary*>(le); sb) {
+     auto ls = _start_new_segment(sb);
+     if (sb->is_major_segment_boundary()) {
+       major_segments.insert(ls->seq);
+       logger->set(l_mdl_segmjr, major_segments.size());
+-      events_since_last_major_segment = 0;
++      minor_segments_since_last_major_segment = 0;
++    } else {
++      ++minor_segments_since_last_major_segment;
+     }
+   }
+ 
+@@ -404,7 +405,7 @@ void MDLog::_segment_upkeep()
+   uint64_t period = journaler->get_layout_period();
+   auto ls = get_current_segment();
+   // start a new segment?
+-  if (events_since_last_major_segment > events_per_segment*major_segment_event_ratio) {
++  if (minor_segments_since_last_major_segment > minor_segments_per_major_segment) {
+     dout(10) << __func__ << ": starting new major segment, current " << *ls << dendl;
+     auto sle = mds->mdcache->create_subtree_map();
+     _submit_entry(sle, NULL);
+@@ -1479,7 +1480,6 @@ void MDLog::_replay_thread()
+     }
+     le->set_start_off(pos);
+ 
+-    events_since_last_major_segment++;
+     if (auto sb = dynamic_cast<SegmentBoundary*>(le.get()); sb) {
+       auto seq = sb->get_seq();
+       if (seq > 0) {
+@@ -1492,7 +1492,9 @@ void MDLog::_replay_thread()
+       if (sb->is_major_segment_boundary()) {
+         major_segments.insert(event_seq);
+         logger->set(l_mdl_segmjr, major_segments.size());
+-        events_since_last_major_segment = 0;
++	minor_segments_since_last_major_segment = 0;
++      } else {
++	++minor_segments_since_last_major_segment;
+       }
+     } else {
+       event_seq++;
+@@ -1623,9 +1625,6 @@ void MDLog::handle_conf_change(const std::set<std::string>& changed, const MDSMa
+   if (changed.count("mds_log_events_per_segment")) {
+     events_per_segment = g_conf().get_val<uint64_t>("mds_log_events_per_segment");
+   }
+-  if (changed.count("mds_log_major_segment_event_ratio")) {
+-    major_segment_event_ratio = g_conf().get_val<uint64_t>("mds_log_major_segment_event_ratio");
+-  }
+   if (changed.count("mds_log_max_events")) {
+     max_events = g_conf().get_val<int64_t>("mds_log_max_events");
+   }
+@@ -1650,4 +1649,7 @@ void MDLog::handle_conf_change(const std::set<std::string>& changed, const MDSMa
+   if (changed.count("mds_log_warn_factor")) {
+     log_warn_factor = g_conf().get_val<double>("mds_log_warn_factor");
+   }
++  if (changed.count("mds_log_minor_segments_per_major_segment")) {
++    minor_segments_per_major_segment = g_conf().get_val<uint64_t>("mds_log_minor_segments_per_major_segment");
++  }
+ }
+diff --git a/src/mds/MDLog.h b/src/mds/MDLog.h
+index 49e3c025dde01..a858b40fa036d 100644
+--- a/src/mds/MDLog.h
++++ b/src/mds/MDLog.h
+@@ -305,9 +305,9 @@ class MDLog {
+   bool debug_subtrees;
+   std::atomic_uint64_t event_large_threshold; // accessed by submit thread
+   uint64_t events_per_segment;
+-  uint64_t major_segment_event_ratio;
+   int64_t max_events;
+   uint64_t max_segments;
++  uint64_t minor_segments_per_major_segment;
+   bool pause;
+   bool skip_corrupt_events;
+   bool skip_unbounded_events;
+@@ -315,7 +315,7 @@ class MDLog {
+   std::set<uint64_t> major_segments;
+   std::set<LogSegment*> expired_segments;
+   std::set<LogSegment*> expiring_segments;
+-  uint64_t events_since_last_major_segment = 0;
++  uint64_t minor_segments_since_last_major_segment = 0;
+   double log_warn_factor;
+ 
+   // log trimming decay counter
+
+From f54be33382a89f438a2c2d0441879fd0242698df Mon Sep 17 00:00:00 2001
+From: Venky Shankar <vshankar@redhat.com>
+Date: Wed, 23 Oct 2024 06:39:27 +0000
+Subject: [PATCH 3/3] doc: remove refrences to
+ `mds_log_major_segment_event_ratio`
+
+Signed-off-by: Venky Shankar <vshankar@redhat.com>
+---
+ doc/cephfs/mds-journaling.rst | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/doc/cephfs/mds-journaling.rst b/doc/cephfs/mds-journaling.rst
+index b6ccf27c8c0ad..9325eab7a2d43 100644
+--- a/doc/cephfs/mds-journaling.rst
++++ b/doc/cephfs/mds-journaling.rst
+@@ -141,14 +141,12 @@ The targetted size of a log segment in terms of number of events is controlled b
+ 
+ .. confval:: mds_log_events_per_segment
+ 
+-The frequency of major segments (noted by the journaling of the latest ``ESubtreeMap``) is controlled by:
++The number of minor mds log segments since last major segment is controlled by:
+ 
+-.. confval:: mds_log_major_segment_event_ratio
++.. confval:: mds_log_minor_segments_per_major_segment
+ 
+-When ``mds_log_events_per_segment * mds_log_major_segment_event_ratio``
+-non-``ESubtreeMap`` events are logged, the MDS will journal a new
+-``ESubtreeMap``. This is necessary to allow the journal to shrink in size
+-during the trimming of expired segments.
++This controls how often the MDS trims expired log segments (higher the value, less
++often the MDS updates the journal expiry position for trimming).
+ 
+ The target maximum number of segments is controlled by:
+ 
