@@ -1,0 +1,13 @@
+diff --git a/src/common/crc32c_intel_fast_zero_asm.s b/src/common/crc32c_intel_fast_zero_asm.s
+index 1c161a69d..9682dceda 100644
+--- a/src/common/crc32c_intel_fast_zero_asm.s
++++ b/src/common/crc32c_intel_fast_zero_asm.s
+@@ -672,4 +672,8 @@ slversion crc32_iscsi_zero_00, 00,   02,  0014
+ %ifidn __OUTPUT_FORMAT__, elf64
+ ; inform linker that this doesn't require executable stack
+ section .note.GNU-stack noalloc noexec nowrite progbits
++; inform linker that this is compatible with IBT and SHSTK
++section .note.gnu.property  note  alloc noexec align=8
++DD 0x00000004,0x00000010,0x00000005,0x00554e47
++DD 0xc0000002,0x00000004,0x00000003,0x00000000
+ %endif
