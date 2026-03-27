@@ -1,0 +1,132 @@
+diff --git a/src/mds/MDSMap.cc b/src/mds/MDSMap.cc
+index e12a97486..af6798401 100644
+--- a/src/mds/MDSMap.cc
++++ b/src/mds/MDSMap.cc
+@@ -984,11 +984,123 @@ void MDSMap::decode(bufferlist::const_iterator& p)
+   }
+ 
+   if (ev >= 17) {
+-    decode(bal_rank_mask, p);
+-  }
++    /*
++     * This is a workaround for https://bugs.launchpad.net/ubuntu/+source/ceph/+bug/2089565.
++     *
++     * The issue is that bal_rank_mask is stored before max_xattr_size in squid
++     * and in reverse order in the squid from Ubuntu 24.04 release (it has ceph
++     * squid from a git snapshot which was taken before the squid release).
++     *
++     * bal_rank_mask is stored as a text string with a decimal representation
++     * of a number inside. The string is stored as length of the string (4
++     * bytes, little endian) and then the string itself (without trailing 0,
++     * just the string itself).
++     *
++     * max_xattr_size is stored as uint64_t little endian integer.
++     *
++     * The following patch was used to get the hexdumps below:
++     *
++     * diff --git a/src/mon/MDSMonitor.cc b/src/mon/MDSMonitor.cc
++     * index 76a57ac443..d36bed2257 100644
++     * --- a/src/mon/MDSMonitor.cc
++     * +++ b/src/mon/MDSMonitor.cc
++     * @@ -143,6 +143,7 @@ void MDSMonitor::update_from_paxos(bool *need_bootstrap)
++     *
++     *    ceph_assert(fsmap_bl.length() > 0);
++     *    dout(10) << __func__ << " got " << version << dendl;
++     * +  fsmap_bl.hexdump(std::cout);
++     *    try {
++     *      PaxosFSMap::decode(fsmap_bl);
++     *    } catch (const ceph::buffer::malformed_input& e) {
++     *
++     *
++     * This is how the relevant part of the bufferlist looks like for the
++     * squid from the 24.04 release 19.2.0~git20240301.4c76c50-0ubuntu6:
++     *
++     * ceph-mon[...]: 00000620  00 00 00 00 00 00 00 00  00 00 00 00 01 07 00 00  |................|
++     * ceph-mon[...]: 00000630  00 63 65 70 68 2d 66 73  00 00 00 00 00 00 00 00  |.ceph-fs........|
++     * ceph-mon[...]: 00000640  ff ff ff ff 00 00 00 00  00 00 00 00 00 02 00 00  |................|
++     *                                                                  ******** <<< bal_rank_mask
++     *                                                                               string length
++     * the top byte of the                                                     (4 bytes, the value is 2)
++     * string length  >>>>>>>>> ** ##### <<< bal_rank_mask itself (it's string "-1" here)
++     * ceph-mon[...]: 00000650  00 2d 31 00 00 01 00 00  00 00 00 00 00 00 00 00  |.-1.............|
++     *                                   ^^^^^^^^^^^^^^^^^^^^^^^^ max_xattr_size
++     *                                   			 (the default value 65536)
++     * ceph-mon[...]: 00000660  00 00 00 00 00 00 00 01  01 05 00 00 00 00 00 00  |................|
++     * ceph-mon[...]: 00000670  00 00 01 00 00 00 b1 17  00 00 00 00 00 00 01 00  |................|
++     * ceph-mon[...]: 00000680  00 00 00 00 00 00 00 00  00 00 01 a1 6e ad 67 53  |............n.gS|
++     *
++     *
++     * And this is how the relevant part of the bufferlist looks like for
++     * the squid release 19.2.0-0ubuntu0.24.04.1:
++     *
++     * ceph-mon[...]: 000003a0  00 00 00 00 00 00 00 00  01 07 00 00 00 63 65 70  |.............cep|
++     * ceph-mon[...]: 000003b0  68 2d 66 73 00 00 00 00  00 00 00 00 ff ff ff ff  |h-fs............|
++     * ceph-mon[...]: 000003c0  00 00 00 00 00 00 00 00  00 00 00 01 00 00 00 00  |................|
++     *                                                      ^^^^^^^^^^^^^^^^^^^^
++     *                          vv <<<<<<<<<<<<<<<<<<<<<<<< max_xattr_size (8 bytes, the value is 65536)
++     * ceph-mon[...]: 000003d0  00 02 00 00 00 2d 31 01  01 05 00 00 00 00 00 00  |.....-1.........|
++     *                             ^^^^^^^^^^^ ##### <<< bal_rank_mask (string, the value is "-1")
++     *         bal_rank_mask string length (2)
++     *
++     * The fix for the bug looks at the byte 4 bytes ahead (if the current
++     * position is 0x3C9, then the code would look at the byte at 0x3CD). In
++     * the squid release the byte most likely would be 0 (it could be non-zero
++     * for 4GiB+ extended attributes, which is highly unlikely). In the
++     * squid git snapshot from 24.04 release it would be the first char of a
++     * decimal representation of a number, which is either "-" (0x2D) or a
++     * number (a value from 0x30 to 0x39). This patch assumes that
++     * max_xattr_size is less than 64GiB and checks the byte against 0x10, and
++     * then uses the correct decoding order for bal_rank_mask and
++     * max_xattr_size for each situation.
++     *
++     * Reef 18.2.4 has bal_rank_mask and then max_xattr_size, the same order as
++     * in the squid release.
++     *
++     * Quincy 17.2.7 has neither of the 2 fields.
++     */
++    dout(20) << "ev=" << ev << dendl;
++
++    unsigned off = p.get_off();
++    dout(20) << "off=" << off << dendl;
++
++    /*
++     * The smallest size is a single decimal digit bal_rank_mask,
++     * which takes 5 bytes.
++     */
++    if (p.get_remaining() < 5) {
++      throw ceph::buffer::malformed_input("the buffer is too small");
++    }
++
++    p.seek(off + 4);
++    uint8_t byte;
++    decode(byte, p);
++    p.seek(off);
++
++    dout(20) << "byte=" << static_cast<int>(byte) << dendl;
++
++    if (byte < 0x10) {
++      dout(20) << "decoding in the normal squid order" << dendl;
++
++      if (ev >= 17) {
++	decode(max_xattr_size, p);
++      }
+ 
+-  if (ev >= 18) {
+-    decode(max_xattr_size, p);
++      if (ev >= 18) {
++	decode(bal_rank_mask, p);
++      }
++    } else {
++      dout(20) << "decoding in the squid git snapshot order" << dendl;
++
++      if (ev >= 17) {
++	decode(bal_rank_mask, p);
++      }
++
++      if (ev >= 18) {
++	decode(max_xattr_size, p);
++      }
++    }
+   }
+ 
+   if (ev >= 19) {
