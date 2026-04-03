@@ -1,0 +1,13 @@
+diff --git a/src/rgw/CMakeLists.txt b/src/rgw/CMakeLists.txt
+index f6ae85fd4..a45845213 100644
+--- a/src/rgw/CMakeLists.txt
++++ b/src/rgw/CMakeLists.txt
+@@ -468,7 +468,7 @@ set(rgw_schedulers_srcs
+ 
+ add_library(rgw_schedulers STATIC ${rgw_schedulers_srcs})
+ target_link_libraries(rgw_schedulers
+-  PUBLIC dmclock::dmclock Boost::context)
++  PUBLIC dmclock::dmclock Boost::context -lstdc++)
+ 
+ set(radosgw_srcs
+   rgw_main.cc)

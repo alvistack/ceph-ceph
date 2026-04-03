@@ -1,0 +1,21 @@
+diff --git a/cmake/modules/Distutils.cmake b/cmake/modules/Distutils.cmake
+index f3d6c41e7..7d545c894 100644
+--- a/cmake/modules/Distutils.cmake
++++ b/cmake/modules/Distutils.cmake
+@@ -95,14 +95,14 @@ function(distutils_add_cython_module target name src)
+     COMMAND
+     env
+     CC="${PY_CC}"
+-    CFLAGS="${PY_CFLAGS}"
++    CFLAGS="${PY_CFLAGS}"\ ${CMAKE_C_FLAGS}
+     CPPFLAGS="${PY_CPPFLAGS}"
+     CXX="${PY_CXX}"
+     LDSHARED="${PY_LDSHARED}"
+     OPT=\"-DNDEBUG -g -fwrapv -O2 -w\"
+     LDFLAGS="${PY_LDFLAGS}"
+     CYTHON_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+-    CEPH_LIBDIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
++    CEPH_LIBDIR=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}\ ${CMAKE_LINKER_FLAGS}\ ${CMAKE_SHARED_LINKER_FLAGS}
+     ${Python3_EXECUTABLE} ${setup_py}
+     build ${maybe_verbose} --build-base ${CYTHON_MODULE_DIR}
+     --build-platlib ${output_dir}
