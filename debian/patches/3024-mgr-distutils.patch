@@ -1,0 +1,32 @@
+Description: Use vendored distutils from setuptools
+ Due to the way Python executes in the mgr process, it
+ avoids the distutils_hack which injects the vendored
+ distutils in setuptools in system modules.
+ .
+ Longer term this needs removing, but for the time
+ being directly reference the vendored distutils module.
+Author: James Page <james.page@ubuntu.com>
+Forwarded: not-needed
+
+--- a/src/pybind/mgr/dashboard/tools.py
++++ b/src/pybind/mgr/dashboard/tools.py
+@@ -9,7 +9,7 @@
+ import time
+ import urllib
+ from datetime import datetime, timedelta
+-from distutils.util import strtobool
++from setuptools._distutils.util import strtobool
+ 
+ import cherrypy
+ from mgr_util import build_url
+--- a/src/pybind/mgr/volumes/fs/operations/pin_util.py
++++ b/src/pybind/mgr/volumes/fs/operations/pin_util.py
+@@ -3,7 +3,7 @@
+ import cephfs
+ 
+ from ..exception import VolumeException
+-from distutils.util import strtobool
++from setuptools._distutils.util import strtobool
+ 
+ _pin_value = {
+     "export": lambda x: int(x),
