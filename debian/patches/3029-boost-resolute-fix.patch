@@ -1,0 +1,549 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ca566b00b..ee40a6de8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -717,8 +717,8 @@ option(WITH_SYSTEM_BOOST "require and build with system Boost" OFF)
+ 
+ # Boost::thread depends on Boost::atomic, so list it explicitly.
+ set(BOOST_COMPONENTS
+-  atomic chrono thread system regex random program_options date_time
+-  iostreams context coroutine url)
++  atomic chrono thread regex random program_options date_time
++  iostreams context coroutine url process)
+ set(BOOST_HEADER_COMPONENTS container)
+ 
+ if(WITH_MGR)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 0cf1be26b..e76e71264 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -503,7 +503,6 @@ set(ceph_common_deps
+   json_spirit erasure_code extblkdev arch crc32
+   ${LIB_RESOLV}
+   Boost::thread
+-  Boost::system
+   Boost::random
+   Boost::program_options
+   Boost::date_time
+diff --git a/src/arrow/cpp/cmake_modules/ThirdpartyToolchain.cmake b/src/arrow/cpp/cmake_modules/ThirdpartyToolchain.cmake
+index a2627c190..d666b5781 100644
+--- a/src/arrow/cpp/cmake_modules/ThirdpartyToolchain.cmake
++++ b/src/arrow/cpp/cmake_modules/ThirdpartyToolchain.cmake
+@@ -1111,11 +1111,6 @@ macro(build_boost)
+     set(BOOST_BUILD_PRODUCTS ${BOOST_STATIC_SYSTEM_LIBRARY}
+                              ${BOOST_STATIC_FILESYSTEM_LIBRARY})
+ 
+-    add_thirdparty_lib(Boost::system
+-                       STATIC
+-                       "${BOOST_STATIC_SYSTEM_LIBRARY}"
+-                       INCLUDE_DIRECTORIES
+-                       "${Boost_INCLUDE_DIR}")
+     add_thirdparty_lib(Boost::filesystem
+                        STATIC
+                        "${BOOST_STATIC_FILESYSTEM_LIBRARY}"
+@@ -1131,7 +1126,6 @@ macro(build_boost)
+                         CONFIGURE_COMMAND ${BOOST_CONFIGURE_COMMAND}
+                         BUILD_COMMAND ${BOOST_BUILD_COMMAND}
+                         INSTALL_COMMAND "")
+-    add_dependencies(Boost::system boost_ep)
+     add_dependencies(Boost::filesystem boost_ep)
+   else()
+     externalproject_add(boost_ep
+@@ -1285,7 +1279,7 @@ if(ARROW_USE_BOOST)
+     unset(BUILD_SHARED_LIBS_KEEP)
+   endif()
+ 
+-  foreach(BOOST_LIBRARY Boost::headers Boost::filesystem Boost::system)
++  foreach(BOOST_LIBRARY Boost::headers Boost::filesystem)
+     if(NOT TARGET ${BOOST_LIBRARY})
+       continue()
+     endif()
+diff --git a/src/arrow/cpp/src/arrow/filesystem/CMakeLists.txt b/src/arrow/cpp/src/arrow/filesystem/CMakeLists.txt
+index a42a8d0f8..0f139fa6d 100644
+--- a/src/arrow/cpp/src/arrow/filesystem/CMakeLists.txt
++++ b/src/arrow/cpp/src/arrow/filesystem/CMakeLists.txt
+@@ -43,8 +43,7 @@ if(ARROW_GCS)
+                  EXTRA_LABELS
+                  filesystem
+                  EXTRA_LINK_LIBS
+-                 Boost::filesystem
+-                 Boost::system)
++                 Boost::filesystem)
+ endif()
+ 
+ if(ARROW_AZURE)
+@@ -52,8 +51,7 @@ if(ARROW_AZURE)
+                  EXTRA_LABELS
+                  filesystem
+                  EXTRA_LINK_LIBS
+-                 Boost::filesystem
+-                 Boost::system)
++                 Boost::filesystem)
+ endif()
+ 
+ if(ARROW_S3)
+@@ -64,8 +62,7 @@ if(ARROW_S3)
+                  EXTRA_LABELS
+                  filesystem
+                  EXTRA_LINK_LIBS
+-                 Boost::filesystem
+-                 Boost::system)
++                 Boost::filesystem)
+   if(TARGET arrow-s3fs-test)
+     set(ARROW_S3FS_TEST_COMPILE_DEFINITIONS)
+     get_target_property(AWS_CPP_SDK_S3_TYPE aws-cpp-sdk-s3 TYPE)
+@@ -103,8 +100,7 @@ if(ARROW_S3)
+                         s3_test_util.cc
+                         STATIC_LINK_LIBS
+                         ${ARROW_BENCHMARK_LINK_LIBS}
+-                        Boost::filesystem
+-                        Boost::system)
++                        Boost::filesystem)
+     if(ARROW_TEST_LINKAGE STREQUAL "static")
+       target_link_libraries(arrow-filesystem-s3fs-benchmark PRIVATE parquet_static)
+     else()
+diff --git a/src/arrow/cpp/src/arrow/flight/CMakeLists.txt b/src/arrow/cpp/src/arrow/flight/CMakeLists.txt
+index 91e0fbf91..f902fa991 100644
+--- a/src/arrow/cpp/src/arrow/flight/CMakeLists.txt
++++ b/src/arrow/cpp/src/arrow/flight/CMakeLists.txt
+@@ -66,7 +66,6 @@ list(APPEND
+      ARROW_FLIGHT_TEST_INTERFACE_LIBS
+      Boost::headers
+      Boost::filesystem
+-     Boost::system
+      ${ARROW_GTEST_GMOCK})
+ list(APPEND ARROW_FLIGHT_TEST_LINK_LIBS gRPC::grpc++)
+ 
+diff --git a/src/arrow/cpp/src/arrow/io/CMakeLists.txt b/src/arrow/cpp/src/arrow/io/CMakeLists.txt
+index d8224192c..5c4ccfef7 100644
+--- a/src/arrow/cpp/src/arrow/io/CMakeLists.txt
++++ b/src/arrow/cpp/src/arrow/io/CMakeLists.txt
+@@ -28,8 +28,7 @@ if(ARROW_HDFS)
+                  PREFIX
+                  "arrow-io"
+                  EXTRA_LINK_LIBS
+-                 Boost::filesystem
+-                 Boost::system)
++                 Boost::filesystem)
+ endif()
+ 
+ add_arrow_test(memory_test PREFIX "arrow-io")
+diff --git a/src/common/Graylog.cc b/src/common/Graylog.cc
+index e9c2565df..9cc9ce3a1 100644
+--- a/src/common/Graylog.cc
++++ b/src/common/Graylog.cc
+@@ -37,7 +37,8 @@ void Graylog::set_destination(const std::string& host, int port)
+ {
+   try {
+     boost::asio::ip::udp::resolver resolver(m_io_service);
+-    m_endpoint = *resolver.resolve(host, std::to_string(port)).cbegin();
++    auto tmp = resolver.resolve(host, std::to_string(port));
++    m_endpoint = (*tmp.begin()).endpoint();
+     m_log_dst_valid = true;
+   } catch (boost::system::system_error const& e) {
+     cerr << "Error resolving graylog destination: " << e.what() << std::endl;
+diff --git a/src/common/TrackedOp.h b/src/common/TrackedOp.h
+index c6e3ab50b..8b2859073 100644
+--- a/src/common/TrackedOp.h
++++ b/src/common/TrackedOp.h
+@@ -48,6 +48,8 @@ class TrackedOp;
+ class OpHistory;
+ 
+ typedef boost::intrusive_ptr<TrackedOp> TrackedOpRef;
++inline void intrusive_ptr_add_ref (TrackedOp *);
++inline void intrusive_ptr_release (TrackedOp *);
+ 
+ class OpHistoryServiceThread : public Thread
+ {
+@@ -455,15 +457,6 @@ public:
+     }
+   }
+ 
+-  // ref counting via intrusive_ptr, with special behavior on final
+-  // put for historical op tracking
+-  friend void intrusive_ptr_add_ref(TrackedOp *o) {
+-    o->get();
+-  }
+-  friend void intrusive_ptr_release(TrackedOp *o) {
+-    o->put();
+-  }
+-
+ protected:
+   virtual std::string _get_state_string() const {
+     return events.empty() ? std::string() : std::string(events.rbegin()->str);
+@@ -474,4 +467,12 @@ inline void OpTracker::default_dumper(const TrackedOp& op, Formatter* f) {
+   op._dump(f);
+ }
+ 
++inline void intrusive_ptr_add_ref(TrackedOp *op) {
++  op->get();
++}
++
++inline void intrusive_ptr_release(TrackedOp *op) {
++  op->put();
++}
++
+ #endif
+diff --git a/src/include/uuid.h b/src/include/uuid.h
+index a5d63c372..3e9003a9c 100644
+--- a/src/include/uuid.h
++++ b/src/include/uuid.h
+@@ -9,6 +9,7 @@
+ #include "encoding.h"
+ #include "random.h"
+ 
++#include <cstdint>
+ #include <ostream>
+ #include <random>
+ 
+@@ -60,11 +61,7 @@ struct uuid_d {
+   }
+ 
+   const char *bytes() const {
+-#if BOOST_VERSION >= 108600
+-    return (const char*)uuid.data();
+-#else
+-    return (const char*)uuid.data;
+-#endif
++    return (const char *)(const uint8_t *)uuid.data;
+   }
+ 
+   void encode(::ceph::buffer::list::contiguous_appender& p) const {
+diff --git a/src/librbd/migration/HttpClient.cc b/src/librbd/migration/HttpClient.cc
+index d212981a9..a469357e1 100644
+--- a/src/librbd/migration/HttpClient.cc
++++ b/src/librbd/migration/HttpClient.cc
+@@ -682,7 +682,7 @@ protected:
+ 
+     // ssl_stream object can't be reused after shut down -- move-in
+     // a freshly constructed instance
+-    m_stream = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>(
++    new (&m_stream) boost::asio::ssl::stream<boost::asio::ip::tcp::socket>(
+       http_client->m_strand, http_client->m_ssl_context);
+   }
+ 
+diff --git a/src/mgr/PyModule.cc b/src/mgr/PyModule.cc
+index 5038267b7..6eb9792d4 100644
+--- a/src/mgr/PyModule.cc
++++ b/src/mgr/PyModule.cc
+@@ -35,26 +35,7 @@
+ // definition for non-const static member
+ std::string PyModule::mgr_store_prefix = "mgr/";
+ 
+-// Courtesy of http://stackoverflow.com/questions/1418015/how-to-get-python-exception-text
+-#define BOOST_BIND_GLOBAL_PLACEHOLDERS
+-// Boost apparently can't be bothered to fix its own usage of its own
+-// deprecated features.
+-
+-// Fix instances of "'BOOST_PP_ITERATION_02' was not declared in this scope; did
+-// you mean 'BOOST_PP_ITERATION_05'" and related macro error bullshit that spans
+-// 300 lines of errors
+-//
+-// Apparently you can't include boost/python stuff _and_ have this header
+-// defined
+-//
+-// Thanks to the ceph-aur folks for the fix at:
+-// https://github.com/bazaah/aur-ceph/commit/8c5cc7d8deec002f7596b6d0860859a0a718f12b 
+-#undef BOOST_MPL_CFG_NO_PREPROCESSED_HEADERS
+-
+-#include <boost/python/extract.hpp>
+-#include <boost/python/import.hpp>
+-#include <boost/python/object.hpp>
+-#undef BOOST_BIND_GLOBAL_PLACEHOLDERS
++#include <boost/python.hpp>
+ #include <boost/algorithm/string/predicate.hpp>
+ #include "include/ceph_assert.h"  // boost clobbers this
+ 
+diff --git a/src/osdc/Objecter.h b/src/osdc/Objecter.h
+index b4e5a84e2..8a086f59e 100644
+--- a/src/osdc/Objecter.h
++++ b/src/osdc/Objecter.h
+@@ -2758,7 +2758,7 @@ private:
+ 	std::unique_lock l(rwlock);
+ 	if (osdmap->get_epoch()) {
+ 	  l.unlock();
+-	  boost::asio::post(std::move(handler));
++      boost::asio::post(service.get_executor(), std::move(handler));
+ 	} else {
+ 	  auto e = boost::asio::get_associated_executor(
+ 	    handler, service.get_executor());
+@@ -2866,9 +2866,10 @@ public:
+     return boost::asio::async_initiate<decltype(consigned), OpSignature>(
+       [epoch, this](auto handler) {
+ 	if (osdmap->get_epoch() >= epoch) {
+-	  boost::asio::post(boost::asio::append(
+-			      std::move(handler),
+-			      boost::system::error_code{}));
++	  boost::asio::post(service.get_executor(),
++                        boost::asio::append(
++			                std::move(handler),
++			                boost::system::error_code{}));
+ 	} else {
+ 	  monc->get_version(
+ 	    "osdmap",
+diff --git a/src/rgw/CMakeLists.txt b/src/rgw/CMakeLists.txt
+index b1e9792f1..89cd6c387 100644
+--- a/src/rgw/CMakeLists.txt
++++ b/src/rgw/CMakeLists.txt
+@@ -351,7 +351,7 @@ if(WITH_OPENLDAP)
+ endif()
+ if(WITH_RADOSGW_LUA_PACKAGES)
+   target_link_libraries(rgw_common
+-    PRIVATE Boost::filesystem StdFilesystem::filesystem)
++    PRIVATE Boost::filesystem Boost::process StdFilesystem::filesystem)
+ endif()
+ 
+ if(WITH_LTTNG)
+diff --git a/src/rgw/rgw_lua.cc b/src/rgw/rgw_lua.cc
+index b9c74cf73..5b128b304 100644
+--- a/src/rgw/rgw_lua.cc
++++ b/src/rgw/rgw_lua.cc
+@@ -8,7 +8,26 @@
+ #include "rgw_lua.h"
+ #ifdef WITH_RADOSGW_LUA_PACKAGES
+ #include <filesystem>
+-#include <boost/process.hpp>
++#include <boost/process/v1/args.hpp>
++#include <boost/process/v1/async.hpp>
++#include <boost/process/v1/async_pipe.hpp>
++#include <boost/process/v1/async_system.hpp>
++#include <boost/process/v1/child.hpp>
++#include <boost/process/v1/cmd.hpp>
++#include <boost/process/v1/env.hpp>
++#include <boost/process/v1/environment.hpp>
++#include <boost/process/v1/error.hpp>
++#include <boost/process/v1/exception.hpp>
++#include <boost/process/v1/exe.hpp>
++#include <boost/process/v1/extend.hpp>
++#include <boost/process/v1/filesystem.hpp>
++#include <boost/process/v1/group.hpp>
++#include <boost/process/v1/handles.hpp>
++#include <boost/process/v1/io.hpp>
++#include <boost/process/v1/locale.hpp>
++#include <boost/process/v1/pipe.hpp>
++#include <boost/process/v1/search_path.hpp>
++#include <boost/process/v1/start_dir.hpp>
+ #endif
+ 
+ #define dout_subsys ceph_subsys_rgw
+@@ -96,7 +115,7 @@ int delete_script(const DoutPrefixProvider *dpp, sal::LuaManager* manager, const
+ 
+ #ifdef WITH_RADOSGW_LUA_PACKAGES
+ 
+-namespace bp = boost::process;
++namespace bp = boost::process::v1;
+ 
+ int add_package(const DoutPrefixProvider* dpp, rgw::sal::Driver* driver, optional_yield y, const std::string& package_name, bool allow_compilation)
+ {
+@@ -142,8 +161,6 @@ int remove_package(const DoutPrefixProvider *dpp, rgw::sal::Driver* driver, opti
+   return driver->get_lua_manager("")->remove_package(dpp, y, package_name);
+ }
+ 
+-namespace bp = boost::process;
+-
+ int list_packages(const DoutPrefixProvider *dpp, rgw::sal::Driver* driver, optional_yield y, packages_t& packages)
+ {
+   return driver->get_lua_manager("")->list_packages(dpp, y, packages);
+diff --git a/src/rgw/rgw_ssd_driver.cc b/src/rgw/rgw_ssd_driver.cc
+index 3475848c6..0ca12af75 100644
+--- a/src/rgw/rgw_ssd_driver.cc
++++ b/src/rgw/rgw_ssd_driver.cc
+@@ -9,6 +9,8 @@
+ 
+ #include <filesystem>
+ #include <errno.h>
++#include <boost/asio/system_executor.hpp>
++
+ namespace efs = std::filesystem;
+ 
+ namespace rgw { namespace cache {
+diff --git a/src/rocksdb/db/blob/blob_file_meta.h b/src/rocksdb/db/blob/blob_file_meta.h
+index d688825c3..fbbf54cf4 100644
+--- a/src/rocksdb/db/blob/blob_file_meta.h
++++ b/src/rocksdb/db/blob/blob_file_meta.h
+@@ -6,6 +6,7 @@
+ #pragma once
+ 
+ #include <cassert>
++#include <cstdint>
+ #include <iosfwd>
+ #include <memory>
+ #include <string>
+diff --git a/src/rocksdb/include/rocksdb/trace_record.h b/src/rocksdb/include/rocksdb/trace_record.h
+index e6c9b7e3b..10aa4deec 100644
+--- a/src/rocksdb/include/rocksdb/trace_record.h
++++ b/src/rocksdb/include/rocksdb/trace_record.h
+@@ -5,6 +5,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <memory>
+ #include <string>
+ #include <vector>
+diff --git a/src/rocksdb/include/rocksdb/trace_record_result.h b/src/rocksdb/include/rocksdb/trace_record_result.h
+index 0cd0004a6..629f06710 100644
+--- a/src/rocksdb/include/rocksdb/trace_record_result.h
++++ b/src/rocksdb/include/rocksdb/trace_record_result.h
+@@ -5,6 +5,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <string>
+ #include <vector>
+ 
+diff --git a/src/test/common/CMakeLists.txt b/src/test/common/CMakeLists.txt
+index a0dae3777..f3addde7f 100644
+--- a/src/test/common/CMakeLists.txt
++++ b/src/test/common/CMakeLists.txt
+@@ -379,44 +379,44 @@ add_ceph_unittest(unittest_hobject)
+ 
+ add_executable(unittest_async_completion test_async_completion.cc)
+ add_ceph_unittest(unittest_async_completion)
+-target_link_libraries(unittest_async_completion ceph-common Boost::system)
++target_link_libraries(unittest_async_completion ceph-common)
+ 
+ 
+ add_executable(unittest_async_max_concurrent_for_each test_async_max_concurrent_for_each.cc)
+ add_ceph_unittest(unittest_async_max_concurrent_for_each)
+-target_link_libraries(unittest_async_max_concurrent_for_each ceph-common Boost::system Boost::context)
++target_link_libraries(unittest_async_max_concurrent_for_each ceph-common Boost::context)
+ 
+ if(NOT WIN32)
+ add_executable(unittest_async_co_spawn_group test_async_co_spawn_group.cc)
+ add_ceph_unittest(unittest_async_co_spawn_group)
+-target_link_libraries(unittest_async_co_spawn_group ceph-common Boost::system)
++target_link_libraries(unittest_async_co_spawn_group ceph-common)
+ 
+ add_executable(unittest_async_co_throttle test_async_co_throttle.cc)
+ add_ceph_unittest(unittest_async_co_throttle)
+-target_link_libraries(unittest_async_co_throttle ceph-common Boost::system)
++target_link_libraries(unittest_async_co_throttle ceph-common)
+ endif(NOT WIN32)
+ 
+ add_executable(unittest_async_shared_mutex test_async_shared_mutex.cc)
+ add_ceph_unittest(unittest_async_shared_mutex)
+-target_link_libraries(unittest_async_shared_mutex ceph-common Boost::system)
++target_link_libraries(unittest_async_shared_mutex ceph-common)
+ 
+ 
+ add_executable(unittest_async_spawn_throttle test_async_spawn_throttle.cc)
+ add_ceph_unittest(unittest_async_spawn_throttle)
+-target_link_libraries(unittest_async_spawn_throttle ceph-common Boost::system Boost::context)
++target_link_libraries(unittest_async_spawn_throttle ceph-common Boost::context)
+ 
+ add_executable(unittest_async_yield_waiter test_async_yield_waiter.cc)
+ add_ceph_unittest(unittest_async_yield_waiter)
+-target_link_libraries(unittest_async_yield_waiter ceph-common Boost::system Boost::context)
++target_link_libraries(unittest_async_yield_waiter ceph-common Boost::context)
+ 
+ 
+ add_executable(unittest_async_parallel_for_each test_async_parallel_for_each.cc)
+ add_ceph_unittest(unittest_async_parallel_for_each)
+-target_link_libraries(unittest_async_parallel_for_each ceph-common Boost::system)
++target_link_libraries(unittest_async_parallel_for_each ceph-common)
+ 
+ add_executable(unittest_async_spawn_group test_async_spawn_group.cc)
+ add_ceph_unittest(unittest_async_spawn_group)
+-target_link_libraries(unittest_async_spawn_group ceph-common Boost::system)
++target_link_libraries(unittest_async_spawn_group ceph-common)
+ 
+ add_executable(unittest_cdc test_cdc.cc
+   $<TARGET_OBJECTS:unit-main>)
+@@ -437,7 +437,7 @@ add_ceph_unittest(unittest_fault_injector)
+ 
+ add_executable(unittest_blocked_completion test_blocked_completion.cc)
+ add_ceph_unittest(unittest_blocked_completion)
+-target_link_libraries(unittest_blocked_completion Boost::system GTest::GTest)
++target_link_libraries(unittest_blocked_completion GTest::GTest)
+ 
+ add_executable(unittest_allocate_unique test_allocate_unique.cc)
+ add_ceph_unittest(unittest_allocate_unique)
+@@ -492,14 +492,14 @@ set_tests_properties(unittest_decode_start_v_checker_expect_failure
+ endif(0)
+ 
+ add_executable(unittest_async_call test_async_call.cc)
+-target_link_libraries(unittest_async_call ceph-common Boost::system
++target_link_libraries(unittest_async_call ceph-common
+   GTest::GTest)
+ add_ceph_unittest(unittest_async_call)
+ 
+ 
+ add_executable(unittest_librados_completion test_librados_completion.cc)
+ target_link_libraries(unittest_librados_completion librados ceph-common
+-  Boost::system GTest::GTest)
++  GTest::GTest)
+ add_ceph_unittest(unittest_librados_completion)
+ 
+ add_executable(unittest_async_cond test_async_cond.cc)
+diff --git a/src/test/common/test_blocked_completion.cc b/src/test/common/test_blocked_completion.cc
+index 72def49a1..9de26368b 100644
+--- a/src/test/common/test_blocked_completion.cc
++++ b/src/test/common/test_blocked_completion.cc
+@@ -72,9 +72,10 @@ auto id(const Executor& executor, CompletionToken&& token,
+ 	Args&& ...args)
+ {
+   return asio::async_initiate<CompletionToken, void(Args...)>(
+-    []<typename ...Args2>(auto handler, Args2&& ...args2) mutable {
+-      asio::post(asio::append(std::move(handler),
+-			      std::forward<Args2>(args2)...));
++    [executor]<typename ...Args2>(auto handler, Args2&& ...args2) mutable {
++      asio::post(executor,
++                 asio::append(std::move(handler),
++			                  std::forward<Args2>(args2)...));
+     }, token, std::forward<Args>(args)...);
+ }
+ 
+diff --git a/src/test/lazy-omap-stats/CMakeLists.txt b/src/test/lazy-omap-stats/CMakeLists.txt
+index 2143a092f..93ddc03a2 100644
+--- a/src/test/lazy-omap-stats/CMakeLists.txt
++++ b/src/test/lazy-omap-stats/CMakeLists.txt
+@@ -4,7 +4,7 @@ add_executable(ceph_test_lazy_omap_stats
+   main.cc
+   lazy_omap_stats_test.cc)
+ target_link_libraries(ceph_test_lazy_omap_stats
+-  librados Boost::system Boost::regex ceph-common ${UNITTEST_LIBS})
++  librados Boost::regex ceph-common ${UNITTEST_LIBS})
+ install(TARGETS
+   ceph_test_lazy_omap_stats
+   DESTINATION ${CMAKE_INSTALL_BINDIR})
+diff --git a/src/test/mon/CMakeLists.txt b/src/test/mon/CMakeLists.txt
+index 8c271407e..5035e4c12 100644
+--- a/src/test/mon/CMakeLists.txt
++++ b/src/test/mon/CMakeLists.txt
+@@ -57,7 +57,7 @@ target_link_libraries(unittest_mon_montypes mon global)
+ # ceph_test_mon_memory_target
+ add_executable(ceph_test_mon_memory_target
+   test_mon_memory_target.cc)
+-target_link_libraries(ceph_test_mon_memory_target Boost::system Threads::Threads)
++target_link_libraries(ceph_test_mon_memory_target Threads::Threads)
+ set_target_properties(ceph_test_mon_memory_target PROPERTIES
+   SKIP_RPATH TRUE
+   INSTALL_RPATH "")
+diff --git a/src/test/neorados/CMakeLists.txt b/src/test/neorados/CMakeLists.txt
+index 432b03364..3a0974bde 100644
+--- a/src/test/neorados/CMakeLists.txt
++++ b/src/test/neorados/CMakeLists.txt
+@@ -11,7 +11,7 @@ target_link_libraries(ceph_test_neorados_start_stop global libneorados
+   ${unittest_libs})
+ 
+ add_executable(ceph_test_neorados_completions completions.cc)
+-target_link_libraries(ceph_test_neorados_completions Boost::system pthread
++target_link_libraries(ceph_test_neorados_completions pthread
+   ${unittest_libs})
+ 
+ add_executable(ceph_test_neorados_op_speed op_speed.cc)
+diff --git a/src/tools/immutable_object_cache/CacheServer.cc b/src/tools/immutable_object_cache/CacheServer.cc
+index a4c4e3bc3..43765fa97 100644
+--- a/src/tools/immutable_object_cache/CacheServer.cc
++++ b/src/tools/immutable_object_cache/CacheServer.cc
+@@ -36,7 +36,7 @@ int CacheServer::run() {
+   }
+ 
+   try {
+-    ret = m_io_service.run();
++    m_io_service.run();
+   } catch (const std::exception& e) {
+     ldout(cct, 1) << "m_io_service run fails: " << e.what() << dendl;
+     return -1;
