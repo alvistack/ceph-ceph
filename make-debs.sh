@@ -19,7 +19,7 @@ set -xe
 . /etc/os-release
 base=${1:-/tmp/release}
 releasedir=$base/$NAME/WORKDIR
-rm -fr $(dirname $releasedir)
+#rm -fr $(dirname $releasedir)
 
 # git describe provides a version that is
 # a) human readable
@@ -32,8 +32,8 @@ rm -fr $(dirname $releasedir)
 # an argument to this script.
 #
 if [ -z "${2}" ]; then
-    vers=$(git describe --match "v*" | sed s/^v//)
-    dvers=${vers}-1
+    vers="18.2.8"
+    dvers="100:${vers}-1"
 else
     vers=${2}
     dvers=${vers}-1${VERSION_CODENAME}

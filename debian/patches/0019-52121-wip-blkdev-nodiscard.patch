@@ -1,0 +1,13 @@
+diff --git a/src/common/blkdev.cc b/src/common/blkdev.cc
+index 6fc2965a19a..315e4f5e964 100644
+--- a/src/common/blkdev.cc
++++ b/src/common/blkdev.cc
+@@ -1186,7 +1186,7 @@ void get_device_metadata(
+       }
+       devpaths += dev + "=" + path;
+     } else {
+-      (*errs)[dev] + " no unique device path for "s + dev + ": " + err;
++      (*errs)[dev] += " no unique device path for "s + dev + ": " + err;
+     }
+   }
+ }
