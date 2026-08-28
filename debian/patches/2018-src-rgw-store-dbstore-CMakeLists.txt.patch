@@ -1,0 +1,21 @@
+diff --git a/src/rgw/store/dbstore/CMakeLists.txt b/src/rgw/store/dbstore/CMakeLists.txt
+index 942643046f1..3d1b5d26bba 100644
+--- a/src/rgw/store/dbstore/CMakeLists.txt
++++ b/src/rgw/store/dbstore/CMakeLists.txt
+@@ -16,7 +16,7 @@ set(dbstore_mgr_srcs
+     dbstore_mgr.cc
+     )
+ 
+-add_library(dbstore_lib ${dbstore_srcs})
++add_library(dbstore_lib STATIC ${dbstore_srcs})
+ target_include_directories(dbstore_lib PUBLIC "${CMAKE_SOURCE_DIR}/src/fmt/include")
+ target_include_directories(dbstore_lib PUBLIC "${CMAKE_SOURCE_DIR}/src/rgw")
+ set(link_targets spawn)
+@@ -39,6 +39,7 @@ ENDIF()
+ 
+ # add pthread library
+ set (CMAKE_LINK_LIBRARIES ${CMAKE_LINK_LIBRARIES} pthread)
++set (CMAKE_LINK_LIBRARIES ${CMAKE_LINK_LIBRARIES} global)
+ 
+ find_package(gtest QUIET)
+ if(WITH_TESTS)

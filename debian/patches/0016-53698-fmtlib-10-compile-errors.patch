@@ -1,0 +1,151 @@
+diff --git a/src/common/LogEntry.h b/src/common/LogEntry.h
+index 3ddebbd30..b2a22350f 100644
+--- a/src/common/LogEntry.h
++++ b/src/common/LogEntry.h
+@@ -16,6 +16,9 @@
+ #define CEPH_LOGENTRY_H
+ 
+ #include <fmt/format.h>
++#if FMT_VERSION >= 90000
++#include <fmt/ostream.h>
++#endif
+ 
+ #include "include/utime.h"
+ #include "msg/msg_fmt.h"
+@@ -194,19 +197,26 @@ inline std::ostream& operator<<(std::ostream& out, const LogEntry& e)
+              << e.channel << " " << e.prio << " " << e.msg;
+ }
+ 
+-template <> struct fmt::formatter<EntityName> : fmt::formatter<std::string_view> {
++namespace fmt {
++
++#if FMT_VERSION >= 90000
++template <> struct formatter<clog_type> : ostream_formatter {};
++#endif
++
++template <> struct formatter<EntityName> : formatter<std::string_view> {
+   template <typename FormatContext>
+-  auto format(const EntityName& e, FormatContext& ctx) {
+-    return formatter<std::string_view>::format(e.to_str(), ctx);
++  auto format(const EntityName& e, FormatContext& ctx) const {
++    return fmt::formatter<std::string_view>::format(e.to_str(), ctx);
+   }
+ };
+ 
+-template <> struct fmt::formatter<LogEntry> : fmt::formatter<std::string_view> {
++template <> struct formatter<LogEntry> : formatter<std::string_view> {
+   template <typename FormatContext>
+-  auto format(const LogEntry& e, FormatContext& ctx) {
++  auto format(const LogEntry& e, FormatContext& ctx) const {
+     return fmt::format_to(ctx.out(), "{} {} ({}) {} : {} {} {}",
+ 			  e.stamp, e.name, e.rank, e.seq, e.channel, e.prio, e.msg);
+   }
+ };
++} // namespace fmt
+ 
+ #endif
+diff --git a/src/include/byteorder.h b/src/include/byteorder.h
+index eb6d5e102..f70dd16eb 100644
+--- a/src/include/byteorder.h
++++ b/src/include/byteorder.h
+@@ -53,3 +53,8 @@ inline ceph_les16 init_les16(__s16 x) {
+   v = x;
+   return v;
+ }
++
++template <typename T>
++auto format_as(ceph_le<T> c) {
++  return static_cast<T>(c);
++}
+diff --git a/src/include/neorados/RADOS_fmt.hpp b/src/include/neorados/RADOS_fmt.hpp
+new file mode 100644
+index 000000000..0d62cc888
+--- /dev/null
++++ b/src/include/neorados/RADOS_fmt.hpp
+@@ -0,0 +1,20 @@
++// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
++// vim: ts=8 sw=2 smarttab
++#pragma once
++/**
++ * \file fmtlib formatters for some neorados types
++ */
++
++#include <fmt/core.h>
++#if FMT_VERSION >= 90000
++#include <fmt/ostream.h>
++#endif
++
++#include <include/neorados/RADOS.hpp>
++
++namespace fmt {
++
++#if FMT_VERSION >= 90000
++template <> struct formatter<neorados::Object> : ostream_formatter {};
++#endif
++} // namespace fmt
+diff --git a/src/osd/SnapMapper.cc b/src/osd/SnapMapper.cc
+index 4feabcda4..41d3433e0 100644
+--- a/src/osd/SnapMapper.cc
++++ b/src/osd/SnapMapper.cc
+@@ -269,10 +269,10 @@ std::set<std::string> SnapMapper::to_raw_keys(
+   for (auto snap : snaps) {
+     keys.insert(to_raw_key(snap, clone));
+   }
+-  dout(20) << fmt::format(
+-		"{}: clone:{} snaps:{} -> keys: {}", __func__, clone, snaps,
+-		keys)
+-	   << dendl;
++//  dout(20) << fmt::format(
++//		"{}: clone:{} snaps:{} -> keys: {}", __func__, clone, snaps,
++//		keys)
++//	   << dendl;
+   return keys;
+ }
+ 
+@@ -318,15 +318,15 @@ SnapMapper::get_snaps_check_consistency(const hobject_t &hoid) const
+   }
+ 
+   if (snaps_from_mapping != *obj_snaps) {
+-    dout(10) << fmt::format(
+-		  "{}: hoid:{} -> mapper internal inconsistency ({} vs {})",
+-		  __func__, hoid, *obj_snaps, snaps_from_mapping)
+-	     << dendl;
++//    dout(10) << fmt::format(
++//		  "{}: hoid:{} -> mapper internal inconsistency ({} vs {})",
++//		  __func__, hoid, *obj_snaps, snaps_from_mapping)
++//	     << dendl;
+     return tl::unexpected(result_t{code_t::inconsistent});
+   }
+-  dout(10) << fmt::format(
+-		"{}: snaps for {}: {}", __func__, hoid, snaps_from_mapping)
+-	   << dendl;
++//  dout(10) << fmt::format(
++//		"{}: snaps for {}: {}", __func__, hoid, snaps_from_mapping)
++//	   << dendl;
+   return obj_snaps;
+ }
+ 
+diff --git a/src/osd/osd_types.h b/src/osd/osd_types.h
+index 38d701569..9b4b26de5 100644
+--- a/src/osd/osd_types.h
++++ b/src/osd/osd_types.h
+@@ -35,6 +35,7 @@
+ #include "msg/msg_types.h"
+ #include "include/compat.h"
+ #include "include/types.h"
++#include "include/types_fmt.h"
+ #include "include/utime.h"
+ #include "include/CompatSet.h"
+ #include "common/ceph_context.h"
+diff --git a/src/tools/neorados.cc b/src/tools/neorados.cc
+index 24966d2ae..44ee1cf19 100644
+--- a/src/tools/neorados.cc
++++ b/src/tools/neorados.cc
+@@ -36,6 +36,7 @@
+ #include "include/buffer.h" // :(
+ 
+ #include "include/neorados/RADOS.hpp"
++#include "include/neorados/RADOS_fmt.hpp"
+ 
+ using namespace std::literals;
+ 

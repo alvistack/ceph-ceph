@@ -1,0 +1,13 @@
+diff --git a/src/rgw/CMakeLists.txt b/src/rgw/CMakeLists.txt
+index 93fa482953b..2999b8d4d2e 100644
+--- a/src/rgw/CMakeLists.txt
++++ b/src/rgw/CMakeLists.txt
+@@ -355,7 +355,7 @@ target_include_directories(radosgw SYSTEM PUBLIC "../rapidjson/include")
+ 
+ target_link_libraries(radosgw
+   PRIVATE ${rgw_libs} rgw_schedulers kmip
+-  PUBLIC dmclock::dmclock
++  PUBLIC dmclock::dmclock -lstdc++
+ )
+ if(WITH_RADOSGW_BEAST_OPENSSL)
+   # used by rgw_asio_frontend.cc
