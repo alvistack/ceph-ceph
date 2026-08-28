@@ -1,0 +1,15 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 5514f5381..1b9353b3b 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -1059,8 +1059,8 @@ endif(WITH_KVS)
+ if(WITH_RADOSGW)
+   if(WITH_RADOSGW_SELECT_PARQUET OR WITH_RADOSGW_ARROW_FLIGHT)
+     if(WITH_SYSTEM_ARROW)
+-      find_package(Arrow 4 REQUIRED QUIET)
+-      find_package(Parquet 4 REQUIRED QUIET)
++      find_package(Arrow REQUIRED QUIET)
++      find_package(Parquet REQUIRED QUIET)
+     else()
+       # find arrow's dependencies
+       if (WITH_SYSTEM_UTF8PROC)

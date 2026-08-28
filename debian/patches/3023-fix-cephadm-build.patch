@@ -1,0 +1,34 @@
+diff --git a/src/cephadm/CMakeLists.txt b/src/cephadm/CMakeLists.txt
+index c8b7c74a9..bfcb87bad 100644
+--- a/src/cephadm/CMakeLists.txt
++++ b/src/cephadm/CMakeLists.txt
+@@ -21,7 +21,7 @@ add_custom_command(
+     --set-version-var=CEPH_RELEASE=${CEPH_RELEASE}
+     --set-version-var=CEPH_RELEASE_NAME=${CEPH_RELEASE_NAME}
+     --set-version-var=CEPH_RELEASE_TYPE=${CEPH_RELEASE_TYPE}
+-    --bundled-dependencies=${CEPHADM_BUNDLED_DEPENDENCIES}
++    --bundled-dependencies=none
+     ${bin_target_file}
+ )
+ 
+@@ -31,3 +31,7 @@ add_custom_target(cephadm ALL
+ install(PROGRAMS
+   ${bin_target_file}
+   DESTINATION ${CMAKE_INSTALL_SBINDIR})
++
++install(DIRECTORY
++  cephadmlib
++  DESTINATION ${Python3_SITELIB})
+diff --git a/src/cephadm/build.py b/src/cephadm/build.py
+index 7cd78e9cd..d0e166b7d 100755
+--- a/src/cephadm/build.py
++++ b/src/cephadm/build.py
+@@ -357,7 +357,7 @@ def _install_pip_deps(tempdir, config):
+     if has_venv:
+         log.info('Attempting to create a virtualenv')
+         venv = tempdir / "_venv_"
+-        _run([sys.executable, '-m', 'venv', str(venv)])
++        _run([sys.executable, '-m', 'venv', str(venv), "--system-site-packages"])
+         executable = str(venv / "bin" / pathlib.Path(executable).name)
+         # try to upgrade pip in the virtualenv. if it fails ignore the error
+         _run([executable, '-m', 'pip', 'install', '-U', 'pip'])
