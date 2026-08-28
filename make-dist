@@ -35,11 +35,37 @@ echo "version $version"
 # update submodules
 echo "updating submodules..."
 force=$(if git submodule usage 2>&1 | grep --quiet 'update.*--force'; then echo --force ; fi)
-if ! git submodule sync || ! git submodule update $force --init --recursive; then
+if ! git submodule sync || ! git submodule update $force --init --recursive --progress; then
     echo "Error: could not initialize submodule projects"
     echo "  Network connectivity might be required."
     exit 1
 fi
+
+download_from() {
+    fname=$1
+    shift
+    sha256=$1
+    shift
+    set +e
+    while true; do
+        url_base=$1
+        shift
+        if [ -z $url_base ]; then
+            echo "Error: failed to download $fname."
+            exit
+        fi
+        url=$url_base/$fname
+        wget --no-verbose -O $fname $url
+        if [ $? != 0 -o ! -e $fname ]; then
+            echo "Download of $url failed"
+        elif [ $(sha256sum $fname | awk '{print $1}') != $sha256 ]; then
+            echo "Error: failed to download $fname: SHA256 mismatch."
+        else
+            break
+        fi
+    done
+    set -e
+}
 
 download_boost() {
     boost_version=$1
@@ -48,25 +74,7 @@ download_boost() {
     shift
     boost_version_underscore=$(echo $boost_version | sed 's/\./_/g')
     boost_fname=boost_${boost_version_underscore}.tar.bz2
-    set +e
-    while true; do
-        url_base=$1
-        shift
-        if [ -z $url_base ]; then
-            echo "Error: failed to download boost."
-            exit
-        fi
-        url=$url_base/$boost_fname
-        wget -c --no-verbose -O $boost_fname $url
-        if [ $? != 0 -o ! -e $boost_fname ]; then
-            echo "Download of $url failed"
-        elif [ $(sha256sum $boost_fname | awk '{print $1}') != $boost_sha256 ]; then
-            echo "Error: failed to download boost: SHA256 mismatch."
-        else
-            break
-        fi
-    done
-    set -e
+    download_from $boost_fname $boost_sha256 $*
     tar xjf $boost_fname -C src \
         --exclude="$boost_version_underscore/libs/*/doc" \
         --exclude="$boost_version_underscore/libs/*/example" \
@@ -80,6 +88,42 @@ download_boost() {
     mv src/boost_${boost_version_underscore} src/boost
     tar cf ${outfile}.boost.tar ${outfile}/src/boost
     rm -rf src/boost
+}
+
+download_liburing() {
+    liburing_version=$1
+    shift
+    liburing_sha256=$1
+    shift
+    liburing_fname=liburing-${liburing_version}.tar.gz
+    download_from $liburing_fname $liburing_sha256 $*
+    tar xzf $liburing_fname -C src  \
+        --exclude=debian \
+        --exclude=examples \
+        --exclude=man \
+        --exclude=test
+    # normalize the names, liburing-0.7 if downloaded from git.kernel.dk,
+    # liburing-liburing-0.7 from github.com
+    mv src/liburing-* src/liburing
+    tar cf ${outfile}.liburing.tar ${outfile}/src/liburing
+    rm -rf src/liburing
+}
+
+download_pmdk() {
+    pmdk_version=$1
+    shift
+    pmdk_sha256=$1
+    shift
+    pmdk_fname=pmdk-${pmdk_version}.tar.gz
+    download_from $pmdk_fname $pmdk_sha256 $*
+    tar xzf $pmdk_fname -C src \
+        --exclude="pmdk-${pmdk_version}/doc" \
+        --exclude="pmdk-${pmdk_version}/src/test" \
+        --exclude="pmdk-${pmdk_version}/src/examples" \
+        --exclude="pmdk-${pmdk_version}/src/benchmarks"
+    mv src/pmdk-${pmdk_version} src/pmdk
+    tar cf ${outfile}.pmdk.tar ${outfile}/src/pmdk
+    rm -rf src/pmdk
 }
 
 build_dashboard_frontend() {
@@ -143,33 +187,53 @@ echo "including src/.git_version, ceph.spec"
 
 (git rev-parse HEAD ; echo $version) 2> /dev/null > src/.git_version
 
-for spec in ceph.spec.in alpine/APKBUILD.in; do
+if [ -r /etc/os-release ]; then
+    source /etc/os-release
+    case $ID in
+        opensuse*|suse|sles)
+            if [ "x$rpm_release" != "x0" ] ; then
+                rpm_release=$(echo $rpm_release | sed 's/.g/+g/')
+                rpm_version="${rpm_version}.${rpm_release}"
+                rpm_release="0"
+            fi
+            ;;
+    esac
+fi
+
+for spec in ceph.spec.in; do
     cat $spec |
         sed "s/@PROJECT_VERSION@/$rpm_version/g" |
         sed "s/@RPM_RELEASE@/$rpm_release/g" |
         sed "s/@TARBALL_BASENAME@/ceph-$version/g" > `echo $spec | sed 's/.in$//'`
 done
 ln -s . $outfile
-tar cvf $outfile.version.tar $outfile/src/.git_version $outfile/ceph.spec $outfile/alpine/APKBUILD
+tar cvf $outfile.version.tar $outfile/src/.git_version $outfile/ceph.spec
 # NOTE: If you change this version number make sure the package is available
 # at the three URLs referenced below (may involve uploading to download.ceph.com)
-boost_version=1.72.0
-download_boost $boost_version 59c9b274bc451cf91a9ba1dd2c7fdcaf5d60b1b3aa83f2c9fa143417cc660722 \
-               https://boostorg.jfrog.io/artifactory/main/release/$boost_version/source \
-               https://downloads.sourceforge.net/project/boost/boost/$boost_version \
-               https://download.ceph.com/qa
-
+boost_version=1.85.0
+download_boost $boost_version 7009fe1faa1697476bdc7027703a2badb84e849b7b0baad5086b087b971f8617 \
+               https://download.ceph.com/qa \
+               https://archives.boost.io/release/$boost_version/source
+download_liburing 2.5 456f5f882165630f0dc7b75e8fd53bd01a955d5d4720729b4323097e6e9f2a98 \
+                  https://github.com/axboe/liburing/archive \
+                  https://git.kernel.dk/cgit/liburing/snapshot
+pmdk_version=1.10
+download_pmdk $pmdk_version 08dafcf94db5ac13fac9139c92225d9aa5f3724ea74beee4e6ca19a01a2eb20c \
+               https://github.com/pmem/pmdk/releases/download/$pmdk_version
 build_dashboard_frontend
 generate_rook_ceph_client
-tar --concatenate -f $outfile.all.tar $outfile.version.tar
-tar --concatenate -f $outfile.all.tar $outfile.boost.tar
-tar --concatenate -f $outfile.all.tar $outfile.tar
-tar --concatenate -f $outfile.all.tar dashboard_frontend.tar
-tar --concatenate -f $outfile.all.tar rook_ceph_client.tar
+for tarball in $outfile.version   \
+               $outfile.boost     \
+               $outfile.liburing  \
+               $outfile.pmdk  \
+               dashboard_frontend \
+               rook_ceph_client   \
+               $outfile; do
+    tar --concatenate -f $outfile.all.tar $tarball.tar
+    rm $tarball.tar
+done
 mv $outfile.all.tar $outfile.tar
 rm $outfile
-rm -f $outfile.version.tar
-rm -f $outfile.boost.tar
 
 echo "compressing..."
 bzip2 -9 $outfile.tar

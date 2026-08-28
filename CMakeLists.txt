@@ -23,6 +23,12 @@ endforeach()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules/")
 
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+if(NOT CMAKE_BUILD_TYPE AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+  set(default_build_type "Release")
+  set(CMAKE_BUILD_TYPE "${default_build_type}" CACHE
+      STRING "Default BUILD_TYPE is Debug, other options are: RelWithDebInfo, Release, and MinSizeRel." FORCE)
+endif()
+
   set(LINUX ON)
   FIND_PACKAGE(Threads)
 elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
@@ -60,7 +66,7 @@ endif(WITH_CCACHE)
 option(WITH_MANPAGE "Build man pages." ON)
 if(WITH_MANPAGE)
   find_program(SPHINX_BUILD
-    NAMES sphinx-build sphinx-build-3)
+    NAMES sphinx-build sphinx-build-3 sphinx-build-3.6)
   if(NOT SPHINX_BUILD)
     message(FATAL_ERROR "Can't find sphinx-build.")
   endif(NOT SPHINX_BUILD)

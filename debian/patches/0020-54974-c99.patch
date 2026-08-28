@@ -1,0 +1,98 @@
+diff --git a/src/pybind/rbd/rbd.pyx b/src/pybind/rbd/rbd.pyx
+index b0206cd16be..4714b8f02df 100644
+--- a/src/pybind/rbd/rbd.pyx
++++ b/src/pybind/rbd/rbd.pyx
+@@ -22,6 +22,7 @@ from libc cimport errno
+ from libc.stdint cimport *
+ from libc.stdlib cimport realloc, free
+ from libc.string cimport strdup
++cimport libcpp
+ 
+ try:
+     from collections.abc import Iterable
+@@ -2530,12 +2531,12 @@ class RBD(object):
+         cdef:
+             rados_ioctx_t _ioctx = convert_ioctx(ioctx)
+             const char *_name = name
+-            bint _exists = False
++            libcpp.bool _exists = False
+         with nogil:
+             ret = rbd_namespace_exists(_ioctx, _name, &_exists)
+         if ret != 0:
+             raise make_ex(ret, 'error verifying namespace')
+-        return bool(_exists != 0)
++        return _exists
+ 
+     def namespace_list(self, ioctx):
+         """
+@@ -4240,12 +4241,12 @@ cdef class Image(object):
+         name = cstr(name, 'name')
+         cdef:
+             char *_name = name
+-            bint _exists = False
++            libcpp.bool _exists = False
+         with nogil:
+             ret = rbd_snap_exists(self.image, _name, &_exists)
+         if ret != 0:
+             raise make_ex(ret, 'error getting snapshot exists for %s' % self.name)
+-        return bool(_exists != 0)
++        return _exists
+ 
+     @requires_not_closed
+     def get_snap_limit(self):
+diff --git a/src/pybind/rgw/rgw.pyx b/src/pybind/rgw/rgw.pyx
+index d5db7f5d93c..540bc4fd7ff 100644
+--- a/src/pybind/rgw/rgw.pyx
++++ b/src/pybind/rgw/rgw.pyx
+@@ -7,6 +7,7 @@ from cpython cimport PyObject, ref, exc, array
+ from libc.stdint cimport *
+ from libcpp cimport bool
+ from libc.stdlib cimport malloc, realloc, free
++cimport libcpp
+ 
+ cimport rados
+ 
+@@ -523,7 +524,7 @@ cdef class LibRGWFS(object):
+         cdef:
+             rgw_file_handle *_dir_handler = <rgw_file_handle*>dir_handler.handler
+             uint64_t _offset = offset
+-            bool _eof
++            libcpp.bool _eof
+             uint32_t _flags = flags
+         with nogil:
+             ret = rgw_readdir(self.fs, _dir_handler, &_offset, &readdir_cb,
+diff --git a/src/tracing/librados.tp b/src/tracing/librados.tp
+index 5cfde1750a4..fd2f3242f7c 100644
+--- a/src/tracing/librados.tp
++++ b/src/tracing/librados.tp
+@@ -2560,7 +2560,7 @@ TRACEPOINT_EVENT(librados, rados_watch3_enter,
+     TP_FIELDS(
+         ctf_integer_hex(rados_ioctx_t, ioctx, ioctx)
+         ctf_string(oid, oid)
+-        ctf_integer_hex(uint64_t, phandle, phandle)
++        ctf_integer_hex(uint64_t*, phandle, phandle)
+         ctf_integer_hex(rados_watchcb2_t, callback, callback)
+         ctf_integer(uint32_t, timeout, timeout)
+         ctf_integer_hex(void*, arg, arg)
+@@ -2590,7 +2590,7 @@ TRACEPOINT_EVENT(librados, rados_aio_watch2_enter,
+         ctf_integer_hex(rados_ioctx_t, ioctx, ioctx)
+         ctf_string(oid, oid)
+         ctf_integer_hex(rados_completion_t, completion, completion)
+-        ctf_integer_hex(uint64_t, phandle, phandle)
++        ctf_integer_hex(uint64_t*, phandle, phandle)
+         ctf_integer_hex(rados_watchcb2_t, callback, callback)
+         ctf_integer(uint32_t, timeout, timeout)
+         ctf_integer_hex(void*, arg, arg)
+diff --git a/src/tracing/tracing-common.h b/src/tracing/tracing-common.h
+index 3e07f9de8e8..03449ab5886 100644
+--- a/src/tracing/tracing-common.h
++++ b/src/tracing/tracing-common.h
+@@ -21,7 +21,7 @@
+ // type should be an integer type
+ // val should have type type*
+ #define ceph_ctf_integerp(type, field, val) \
+-    ctf_integer(type, field, (val) == NULL ? 0 : (val)) \
++    ctf_integer(type, field, (val) == NULL ? 0 : *(val)) \
+     ctf_integer(uint8_t, field##_isnull, (val) == NULL)
+ 
+ // val should have type char*

@@ -1,0 +1,133 @@
+diff --git a/cmake/modules/Builduring.cmake b/cmake/modules/Builduring.cmake
+new file mode 100644
+index 00000000000..daddb070cf1
+--- /dev/null
++++ b/cmake/modules/Builduring.cmake
+@@ -0,0 +1,39 @@
++function(build_uring)
++  include(FindMake)
++  find_make("MAKE_EXECUTABLE" "make_cmd")
++
++  if(EXISTS "${PROJECT_SOURCE_DIR}/src/liburing/configure")
++    set(source_dir_args
++      SOURCE_DIR "${PROJECT_SOURCE_DIR}/src/liburing")
++  else()
++    set(source_dir_args
++      SOURCE_DIR ${CMAKE_BINARY_DIR}/src/liburing
++      GIT_REPOSITORY https://github.com/axboe/liburing.git
++      GIT_TAG "4e360f71131918c36774f51688e5c65dea8d43f2"
++      GIT_SHALLOW TRUE
++      GIT_CONFIG advice.detachedHead=false)
++  endif()
++
++  include(ExternalProject)
++  ExternalProject_Add(liburing_ext
++    ${source_dir_args}
++    CONFIGURE_COMMAND <SOURCE_DIR>/configure
++    BUILD_COMMAND env CC=${CMAKE_C_COMPILER} "CFLAGS=${CMAKE_C_FLAGS} -fPIC" ${make_cmd} -C src -s
++    BUILD_IN_SOURCE 1
++    BUILD_BYPRODUCTS "<SOURCE_DIR>/src/liburing.a"
++    INSTALL_COMMAND ""
++    UPDATE_COMMAND "")
++  unset(make_cmd)
++
++  ExternalProject_Get_Property(liburing_ext source_dir)
++  set(URING_INCLUDE_DIR "${source_dir}/src/include")
++  set(URING_LIBRARY_DIR "${source_dir}/src")
++
++  add_library(uring::uring STATIC IMPORTED GLOBAL)
++  add_dependencies(uring::uring liburing_ext)
++  file(MAKE_DIRECTORY ${URING_INCLUDE_DIR})
++  set_target_properties(uring::uring PROPERTIES
++    INTERFACE_INCLUDE_DIRECTORIES ${URING_INCLUDE_DIR}
++    IMPORTED_LINK_INTERFACE_LANGUAGES "C"
++    IMPORTED_LOCATION "${URING_LIBRARY_DIR}/liburing.a")
++endfunction()
+diff --git a/cmake/modules/FindMake.cmake b/cmake/modules/FindMake.cmake
+new file mode 100644
+index 00000000000..2a57a8df7f4
+--- /dev/null
++++ b/cmake/modules/FindMake.cmake
+@@ -0,0 +1,17 @@
++function(find_make make_exe make_cmd)
++  # make_exe the name of the variable whose value will be the path to "make"
++  #          executable
++  # make_cmd the name of the variable whose value will be the command to
++  #          used in the generated build script executed by the cmake generator
++  find_program(MAKE_EXECUTABLE NAMES gmake make)
++  if(NOT MAKE_EXECUTABLE)
++    message(FATAL_ERROR "Can't find make")
++  endif()
++  set(${make_exe} "${MAKE_EXECUTABLE}" PARENT_SCOPE)
++  if(CMAKE_MAKE_PROGRAM MATCHES "make")
++    # try to inherit command line arguments passed by parent "make" job
++    set(${make_cmd} "$(MAKE)" PARENT_SCOPE)
++  else()
++    set(${make_cmd} "${MAKE_EXECUTABLE}" PARENT_SCOPE)
++  endif()
++endfunction()
+diff --git a/cmake/modules/Finduring.cmake b/cmake/modules/Finduring.cmake
+new file mode 100644
+index 00000000000..10c8de42550
+--- /dev/null
++++ b/cmake/modules/Finduring.cmake
+@@ -0,0 +1,21 @@
++# - Find uring
++#
++# URING_INCLUDE_DIR - Where to find liburing.h
++# URING_LIBRARIES - List of libraries when using uring.
++# uring_FOUND - True if uring found.
++
++find_path(URING_INCLUDE_DIR liburing.h)
++find_library(URING_LIBRARIES liburing.a liburing)
++
++include(FindPackageHandleStandardArgs)
++find_package_handle_standard_args(uring DEFAULT_MSG URING_LIBRARIES URING_INCLUDE_DIR)
++
++if(uring_FOUND AND NOT TARGET uring::uring)
++  add_library(uring::uring UNKNOWN IMPORTED)
++  set_target_properties(uring::uring PROPERTIES
++    INTERFACE_INCLUDE_DIRECTORIES "${URING_INCLUDE_DIR}"
++    IMPORTED_LINK_INTERFACE_LANGUAGES "C"
++    IMPORTED_LOCATION "${URING_LIBRARIES}")
++endif()
++
++mark_as_advanced(URING_INCLUDE_DIR URING_LIBRARIES)
+diff --git a/src/os/CMakeLists.txt b/src/os/CMakeLists.txt
+index 760244b9b43..740f5225d91 100644
+--- a/src/os/CMakeLists.txt
++++ b/src/os/CMakeLists.txt
+@@ -134,27 +134,11 @@ if(WITH_EVENTTRACE)
+ endif()
+ 
+ if(WITH_LIBURING)
+-  include(ExternalProject)
+-  if("${CMAKE_GENERATOR}" MATCHES "Make")
+-    set(make_cmd "$(MAKE)")
++  if(WITH_SYSTEM_LIBURING)
++    find_package(uring REQUIRED)
+   else()
+-    set(make_cmd "make")
++    include(Builduring)
++    build_uring()
+   endif()
+-  ExternalProject_Add(liburing_ext
+-    DOWNLOAD_DIR ${CMAKE_BINARY_DIR}/src/
+-    GIT_REPOSITORY http://git.kernel.dk/liburing
+-    GIT_TAG "4e360f71131918c36774f51688e5c65dea8d43f2"
+-    SOURCE_DIR ${CMAKE_BINARY_DIR}/src/liburing
+-    CONFIGURE_COMMAND <SOURCE_DIR>/configure
+-    BUILD_COMMAND env CC=${CMAKE_C_COMPILER} ${make_cmd} -C src -s
+-    BUILD_IN_SOURCE 1
+-    INSTALL_COMMAND "")
+-  unset(make_cmd)
+-  add_library(liburing STATIC IMPORTED GLOBAL)
+-  add_dependencies(liburing liburing_ext)
+-  set_target_properties(liburing PROPERTIES
+-    IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+-    IMPORTED_LOCATION "${CMAKE_BINARY_DIR}/src/liburing/src/liburing.a")
+-  target_link_libraries(os liburing)
+-  target_include_directories(os SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/src/liburing/src/include")
+-endif(WITH_LIBURING)
++  target_link_libraries(os uring::uring)
++endif()

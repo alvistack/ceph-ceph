@@ -19,7 +19,7 @@ set -xe
 base=${1:-/tmp/release}
 codename=$(lsb_release -sc)
 releasedir=$base/$(lsb_release -si)/WORKDIR
-rm -fr $(dirname $releasedir)
+#rm -fr $(dirname $releasedir)
 mkdir -p $releasedir
 #
 # remove all files not under git so they are not
@@ -33,7 +33,7 @@ git clean -dxf
 # c) compares higher than any previous commit
 # d) contains the short hash of the commit
 #
-vers=$(git describe --match "v*" | sed s/^v//)
+vers="15.2.17"
 ./make-dist $vers
 #
 # rename the tarbal to match debian conventions and extract it
@@ -53,7 +53,7 @@ perl -pi -e 's/--dbg-package.*//' ceph-$vers/debian/rules
 # directory is included in the sources and the upstream version will
 # change each time it is modified.
 #
-dvers="$vers-1"
+dvers="100:$vers-1"
 #
 # update the changelog to match the desired version
 #

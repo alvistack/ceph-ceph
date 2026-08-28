@@ -1,0 +1,38 @@
+diff --git a/src/include/buffer.h b/src/include/buffer.h
+index 5c8b427d030..a22c696aa42 100644
+--- a/src/include/buffer.h
++++ b/src/include/buffer.h
+@@ -38,6 +38,7 @@
+ # include <sys/mman.h>
+ #endif
+ 
++#include <memory>
+ #include <iosfwd>
+ #include <iomanip>
+ #include <list>
+diff --git a/src/common/LogEntry.cc b/src/common/LogEntry.cc
+index 993bf444dc3..cb65aa5d147 100644
+--- a/src/common/LogEntry.cc
++++ b/src/common/LogEntry.cc
+@@ -172,7 +172,7 @@ string clog_type_to_string(clog_type t)
+       return "crit";
+     default:
+       ceph_abort();
+-      return 0;
++      return "";
+   }
+ }
+ 
+diff --git a/src/test/test_trans.cc b/src/test/test_trans.cc
+index b52c6109cbf..dc3cfa830cc 100644
+--- a/src/test/test_trans.cc
++++ b/src/test/test_trans.cc
+@@ -51,7 +51,7 @@ int main(int argc, const char **argv)
+   cout << "#dev " << filename << std::endl;
+   cout << "#mb " << mb << std::endl;
+ 
+-  ObjectStore *fs = new FileStore(cct.get(), filename, NULL);
++  ObjectStore *fs = new FileStore(cct.get(), filename, "");
+   if (fs->mount() < 0) {
+     cout << "mount failed" << std::endl;
+     return -1;

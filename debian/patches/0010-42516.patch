@@ -1,0 +1,14 @@
+diff --git a/src/compressor/snappy/SnappyCompressor.h b/src/compressor/snappy/SnappyCompressor.h
+index 0cfb819cd96..98a3c216696 100644
+--- a/src/compressor/snappy/SnappyCompressor.h
++++ b/src/compressor/snappy/SnappyCompressor.h
+@@ -96,8 +96,8 @@ class SnappyCompressor : public Compressor {
+     if (qat_enabled)
+       return qat_accel.decompress(p, compressed_len, dst);
+ #endif
+-    snappy::uint32 res_len = 0;
+     BufferlistSource source_1(p, compressed_len);
++    uint32_t res_len = 0;
+     if (!snappy::GetUncompressedLength(&source_1, &res_len)) {
+       return -1;
+     }

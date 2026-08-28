@@ -1,0 +1,12 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0d1cf4e78a3..e09b5d80da2 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -30,6 +30,7 @@ if(NOT CMAKE_BUILD_TYPE AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+ endif()
+ 
+   set(LINUX ON)
++  set(THREADS_PREFER_PTHREAD_FLAG ON)
+   FIND_PACKAGE(Threads)
+ elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+   set(FREEBSD ON)

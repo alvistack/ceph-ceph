@@ -1,0 +1,24 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 6e535dd2c85..13c7bba9cef 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -289,12 +289,15 @@ add_subdirectory(json_spirit)
+ include_directories(SYSTEM "${CMAKE_SOURCE_DIR}/src/xxHash")
+ include_directories(SYSTEM "${CMAKE_SOURCE_DIR}/src/rapidjson/include")
+ 
+-find_package(fmt 5.2.1 QUIET)
+-if(fmt_FOUND)
+-  include_directories(SYSTEM "${fmt_INCLUDE_DIR}")
++option(WITH_SYSTEM_FMT "require and build with system fmt" OFF)
++if (WITH_SYSTEM_FMT)
++  find_package(fmt 5.2.1 REQUIRED)
+ else()
+-  message(STATUS "Could not find fmt, will build it")
++  set(old_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
++  set(BUILD_SHARED_LIBS FALSE)
+   add_subdirectory(fmt)
++  set(BUILD_SHARED_LIBS ${old_BUILD_SHARED_LIBS})
++  unset(old_BUILD_SHARED_LIBS)
+   include_directories(SYSTEM "${CMAKE_SOURCE_DIR}/src/fmt/include")
+ endif()
+ 
