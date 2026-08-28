@@ -1,0 +1,12 @@
+diff --git a/src/compressor/CMakeLists.txt b/src/compressor/CMakeLists.txt
+index d8b9fd83cda..96db1ad9190 100644
+--- a/src/compressor/CMakeLists.txt
++++ b/src/compressor/CMakeLists.txt
+@@ -5,6 +5,7 @@ if (HAVE_QATZIP)
+   list(APPEND compressor_srcs QatAccel.cc)
+ endif()
+ add_library(compressor_objs OBJECT ${compressor_srcs})
++add_dependencies(compressor_objs common-objs)
+ 
+ ## compressor plugins
+ 
