@@ -1,0 +1,16 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 62dc29fb8..6fb936d5c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -264,10 +264,7 @@ if(WITH_RBD AND LINUX)
+ endif()
+ 
+ # libnbd
+-if(WITH_RBD AND NOT WIN32)
+-  find_package(libnbd 1.0 REQUIRED)
+-  set(HAVE_LIBNBD ${LIBNBD_FOUND})
+-endif()
++set(HAVE_LIBNBD OFF)
+ 
+ include(CMakeDependentOption)
+ 

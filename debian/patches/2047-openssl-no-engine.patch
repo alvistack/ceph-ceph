@@ -1,0 +1,40 @@
+diff --git a/src/common/openssl_opts_handler.cc b/src/common/openssl_opts_handler.cc
+index 6b16d521a..e972586b6 100644
+--- a/src/common/openssl_opts_handler.cc
++++ b/src/common/openssl_opts_handler.cc
+@@ -16,6 +16,7 @@
+ 
+ #include <openssl/bio.h>
+ #include <openssl/conf.h>
++#include <openssl/err.h>
+ #ifndef OPENSSL_NO_ENGINE
+ #include <openssl/engine.h>
+ #endif
+@@ -121,11 +122,13 @@ void load_module(const string &engine_conf)
+ #pragma GCC diagnostic push
+ #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+ 
++#ifndef OPENSSL_NO_ENGINE
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+   ENGINE_load_builtin_engines();
+ #pragma clang diagnostic pop
+ #pragma GCC diagnostic pop
++#endif
+ 
+   if (CONF_modules_load(
+           conf, nullptr,
+diff --git a/src/jaegertracing/opentelemetry-cpp/third_party/prometheus-cpp/3rdparty/civetweb/src/civetweb.c b/src/jaegertracing/opentelemetry-cpp/third_party/prometheus-cpp/3rdparty/civetweb/src/civetweb.c
+index fea9e6f98..c7eddb20b 100644
+--- a/src/jaegertracing/opentelemetry-cpp/third_party/prometheus-cpp/3rdparty/civetweb/src/civetweb.c
++++ b/src/jaegertracing/opentelemetry-cpp/third_party/prometheus-cpp/3rdparty/civetweb/src/civetweb.c
+@@ -1744,7 +1744,9 @@ typedef struct SSL_CTX SSL_CTX;
+ #include <openssl/conf.h>
+ #include <openssl/crypto.h>
+ #include <openssl/dh.h>
++#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+ #include <openssl/engine.h>
++#endif
+ #include <openssl/err.h>
+ #include <openssl/opensslv.h>
+ #include <openssl/pem.h>

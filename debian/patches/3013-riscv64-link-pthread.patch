@@ -1,0 +1,12 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5b0a96e01..06f555e82 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -28,6 +28,7 @@ set(CEPH_BUILD_TYPE ${CMAKE_BUILD_TYPE})
+ 
+ if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+   set(LINUX ON)
++  set(THREADS_PREFER_PTHREAD_FLAG ON)
+   FIND_PACKAGE(Threads)
+ elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+   set(FREEBSD ON)
