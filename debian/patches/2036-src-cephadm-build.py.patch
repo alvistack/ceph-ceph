@@ -1,0 +1,13 @@
+diff --git a/src/cephadm/build.py b/src/cephadm/build.py
+index ed39c84e9..f6ea8380f 100755
+--- a/src/cephadm/build.py
++++ b/src/cephadm/build.py
+@@ -161,7 +161,7 @@ class Config:
+     def __init__(self, cli_args):
+         self.cli_args = cli_args
+         self._maj_min = sys.version_info[0:2]
+-        self.install_dependencies = True
++        self.install_dependencies = False
+         self.deps_mode = DependencyMode[cli_args.bundled_dependencies]
+         if self.deps_mode == DependencyMode.none:
+             self.install_dependencies = False

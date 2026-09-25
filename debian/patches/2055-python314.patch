@@ -1,0 +1,60 @@
+diff --git a/src/pybind/cephfs/setup.py b/src/pybind/cephfs/setup.py
+index f6c2025..6cd9245 100755
+--- a/src/pybind/cephfs/setup.py
++++ b/src/pybind/cephfs/setup.py
+@@ -1,11 +1,11 @@
+ import os
+-import pkgutil
++import importlib.util
+ import shutil
+ import subprocess
+ import sys
+ import tempfile
+ import textwrap
+-if not pkgutil.find_loader('setuptools'):
++if not importlib.util.find_spec('setuptools'):
+     from distutils.core import setup
+     from distutils.extension import Extension
+ else:
+diff --git a/src/pybind/rados/setup.py b/src/pybind/rados/setup.py
+index 62b54d2..077e00d 100755
+--- a/src/pybind/rados/setup.py
++++ b/src/pybind/rados/setup.py
+@@ -1,5 +1,5 @@
+-import pkgutil
+-if not pkgutil.find_loader('setuptools'):
++import importlib.util
++if not importlib.util.find_spec('setuptools'):
+     from distutils.core import setup
+     from distutils.extension import Extension
+ else:
+diff --git a/src/pybind/rbd/setup.py b/src/pybind/rbd/setup.py
+index eeb33c7..6a1e46b 100755
+--- a/src/pybind/rbd/setup.py
++++ b/src/pybind/rbd/setup.py
+@@ -1,11 +1,11 @@
+ import os
+-import pkgutil
++import importlib.util
+ import shutil
+ import subprocess
+ import sys
+ import tempfile
+ import textwrap
+-if not pkgutil.find_loader('setuptools'):
++if not importlib.util.find_spec('setuptools'):
+     from distutils.core import setup
+     from distutils.extension import Extension
+ else:
+diff --git a/src/pybind/rgw/setup.py b/src/pybind/rgw/setup.py
+index ed45399..8c0de53 100755
+--- a/src/pybind/rgw/setup.py
++++ b/src/pybind/rgw/setup.py
+@@ -1,5 +1,5 @@
+-import pkgutil
+-if not pkgutil.find_loader('setuptools'):
++import importlib.util
++if not importlib.util.find_spec('setuptools'):
+     from distutils.core import setup
+     from distutils.extension import Extension
+ else:
