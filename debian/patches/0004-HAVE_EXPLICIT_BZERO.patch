@@ -1,0 +1,28 @@
+diff --git a/cmake/modules/CephChecks.cmake b/cmake/modules/CephChecks.cmake
+index fcde99f4b07..bd971f91d64 100644
+--- a/cmake/modules/CephChecks.cmake
++++ b/cmake/modules/CephChecks.cmake
+@@ -82,6 +82,7 @@ check_symbol_exists(F_SETPIPE_SZ "linux/fcntl.h" CEPH_HAVE_SETPIPE_SZ)
+ check_symbol_exists(__func__ "" HAVE_FUNC)
+ check_symbol_exists(__PRETTY_FUNCTION__ "" HAVE_PRETTY_FUNC)
+ check_symbol_exists(getentropy "unistd.h" HAVE_GETENTROPY)
++check_symbol_exists(explicit_bzero "string.h" HAVE_EXPLICIT_BZERO)
+ 
+ include(CheckCXXSourceCompiles)
+ check_cxx_source_compiles("
+diff --git a/src/common/compat.cc b/src/common/compat.cc
+index 82b57ad94b5..9ae7c83c969 100644
+--- a/src/common/compat.cc
++++ b/src/common/compat.cc
+@@ -241,8 +241,10 @@ int ceph_memzero_s(void *dest, size_t destsz, size_t count) {
+     return memset_s(dest, destsz, 0, count);
+ #elif defined(_WIN32)
+     SecureZeroMemory(dest, count);
+-#else
++#elif HAVE_EXPLICIT_BZERO
+     explicit_bzero(dest, count);
++#else
++    bzero(dest, count);
+ #endif
+     return 0;
+ }
